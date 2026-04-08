@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: browser-actions/setup-chrome@v2
         with:
-          chrome-version: latest
+          chrome-version: 146
           install-chromedriver: true
 
       - name: Set Maven args
