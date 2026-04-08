@@ -68,9 +68,6 @@ jobs:
           node --version
           npm --version
 
-      - name: Compile all sources
-        run: mvn clean test-compile -DskipFrontend $MAVEN_ARGS
-
       - name: Unit tests and install
         run: |
           mvn install -DskipTests -Drelease -T $FORK_COUNT $MAVEN_ARGS || {
