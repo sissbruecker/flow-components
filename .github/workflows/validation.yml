@@ -60,9 +60,7 @@ jobs:
           TB_LICENSE: ${{ secrets.TB_LICENSE }}
         run: |
           mkdir -p ~/.vaadin
-          user="${TB_LICENSE%%/*}"
-          key="${TB_LICENSE#*/}"
-          echo "{\"username\":\"${user}\",\"proKey\":\"${key}\"}" > ~/.vaadin/proKey
+          echo "$TB_LICENSE" > ~/.vaadin/proKey
 
       - name: Show environment info
         run: |
@@ -148,11 +146,8 @@ jobs:
 
       - name: Run integration tests
         if: steps.skip-ci.outputs.skip != 'true'
-        env:
-          TBLICENSE: ${{ secrets.TB_LICENSE }}
         run: |
           args="$MAVEN_ARGS"
-          [ -n "$TBLICENSE" ] && args="$args -Dvaadin.testbench.developer.license=$TBLICENSE"
           args="$args -Dtest.use.hub=true -Dcom.vaadin.testbench.Parameters.hubHostname=localhost -Dcom.vaadin.testbench.Parameters.hubPort=4444"
           args="$args -Dfailsafe.rerunFailingTestsCount=2 -Dmaven.test.redirectTestOutputToFile=true"
           mode="-Dfailsafe.forkCount=$FORK_COUNT -Dcom.vaadin.testbench.Parameters.testsInParallel=1"
