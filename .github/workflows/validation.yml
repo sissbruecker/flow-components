@@ -24,13 +24,12 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    services:
-      selenium:
-        image: selenium/standalone-chrome:latest
-        options: --shm-size=2g
-        ports:
-          - 4444:4444
     steps:
+      - uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: latest
+          install-chromedriver: true
+
       - name: Set Maven args
         run: |
           args="-ntp -B"
@@ -148,35 +147,9 @@ jobs:
         if: steps.skip-ci.outputs.skip != 'true'
         run: |
           args="$MAVEN_ARGS"
-          args="$args -Dtest.use.hub=true -Dcom.vaadin.testbench.Parameters.hubHostname=localhost -Dcom.vaadin.testbench.Parameters.hubPort=4444"
-          args="$args -Dfailsafe.rerunFailingTestsCount=2 -Dmaven.test.redirectTestOutputToFile=true"
+          args="$args -Dfailsafe.rerunFailingTestsCount=2"
           mode="-Dfailsafe.forkCount=$FORK_COUNT -Dcom.vaadin.testbench.Parameters.testsInParallel=1"
 
           mvn verify -Dvaadin.pnpm.enable -Drun-it -Drelease -Dvaadin.productionMode \
             -Dvaadin.force.production.build=true \
             $mode $args -pl integration-tests -DskipUnitTests
-
-      - name: Publish unit test results
-        if: always()
-        ## Make sonar happy for external actions
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
-        with:
-          name: Unit Tests
-          path: '**/target/surefire-reports/TEST-*.xml'
-          reporter: java-junit
-
-      - name: Publish integration test results
-        if: always()
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
-        with:
-          name: Integration Tests
-          path: 'integration-tests/target/failsafe-reports/TEST-*.xml'
-          reporter: java-junit
-
-      - name: Upload error screenshots
-        if: failure()
-        uses: actions/upload-artifact@v5
-        with:
-          name: error-screenshots
-          path: 'integration-tests/error-screenshots/'
-          retention-days: 5
