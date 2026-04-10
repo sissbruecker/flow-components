@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FORK_COUNT: 5
+  FORK_COUNT: 1
 
 jobs:
   validation:
@@ -33,7 +33,6 @@ jobs:
       - name: Set Maven args
         run: |
           args="-ntp -B"
-          [ "${{ runner.debug }}" != "1" ] && args="$args -q"
           echo "MAVEN_ARGS=$args" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v6
