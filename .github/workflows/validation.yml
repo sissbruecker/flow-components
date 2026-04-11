@@ -73,14 +73,19 @@ jobs:
           it_module="vaadin-$elements-flow-parent/vaadin-$elements-flow-integration-tests"
           echo "IT_MODULE=$it_module" >> "$GITHUB_ENV"
 
-          mvn package -am -pl "$it_module" \
-            $MAVEN_ARGS -DskipTests -DskipUnitTests \
+          mvn install -am -pl "$it_module" \
+            $MAVEN_ARGS -DskipTests -DskipUnitTests -DskipJetty -DskipFrontend \
+            -Dvaadin.pnpm.enable
+
+          mvn com.vaadin:flow-maven-plugin:build-frontend package -pl "$it_module" \
+            $MAVEN_ARGS -DskipTests -DskipUnitTests -DskipJetty \
             -Dvaadin.pnpm.enable -Dvaadin.productionMode -Dvaadin.force.production.build=true
 
       - name: Start Jetty
         run: |
-          mvn jetty:start-war -pl "$IT_MODULE" \
-            $MAVEN_ARGS -DskipFrontend -Dvaadin.productionMode
+          mvn jetty:run-war -pl "$IT_MODULE" \
+            $MAVEN_ARGS -DskipFrontend -Dvaadin.productionMode &
+          timeout 120 bash -c 'until curl -sf -o /dev/null http://localhost:8080; do sleep 2; done'
 
       - name: Run Failsafe
         run: |
