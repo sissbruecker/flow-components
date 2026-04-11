@@ -67,13 +67,30 @@ jobs:
           node --version
           npm --version
 
-      - name: Run integration tests
+      - name: Build
         run: |
-          args="$MAVEN_ARGS"
-          args="$args -Dfailsafe.rerunFailingTestsCount=2"
-          mode="-Dfailsafe.forkCount=$FORK_COUNT -Dcom.vaadin.testbench.Parameters.testsInParallel=1"
           elements="${{ github.event.inputs.components || '' }}"
+          it_module="vaadin-$elements-flow-parent/vaadin-$elements-flow-integration-tests"
+          echo "IT_MODULE=$it_module" >> "$GITHUB_ENV"
 
-          mvn verify -am -Dvaadin.pnpm.enable -Drun-it -Dvaadin.productionMode \
-            -Dvaadin.force.production.build=true \
-            $mode $args -pl "vaadin-$elements-flow-parent/vaadin-$elements-flow-integration-tests" -DskipUnitTests
+          mvn package -am -pl "$it_module" \
+            $MAVEN_ARGS -DskipTests -DskipUnitTests \
+            -Dvaadin.pnpm.enable -Dvaadin.productionMode -Dvaadin.force.production.build=true
+
+      - name: Start Jetty
+        run: |
+          mvn jetty:start-war -pl "$IT_MODULE" \
+            $MAVEN_ARGS -DskipFrontend -Dvaadin.productionMode
+
+      - name: Run Failsafe
+        run: |
+          mvn failsafe:integration-test failsafe:verify -pl "$IT_MODULE" \
+            $MAVEN_ARGS -DskipJetty \
+            -Dfailsafe.rerunFailingTestsCount=2 \
+            -Dfailsafe.forkCount=$FORK_COUNT \
+            -Dcom.vaadin.testbench.Parameters.testsInParallel=1
+
+      - name: Stop Jetty
+        if: always()
+        run: |
+          mvn jetty:stop -pl "$IT_MODULE" $MAVEN_ARGS
