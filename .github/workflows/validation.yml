@@ -74,6 +74,6 @@ jobs:
           mode="-Dfailsafe.forkCount=$FORK_COUNT -Dcom.vaadin.testbench.Parameters.testsInParallel=1"
           elements="${{ github.event.inputs.components || '' }}"
 
-          mvn verify -am -Dvaadin.pnpm.enable -Drun-it -Drelease -Dvaadin.productionMode \
+          mvn verify -am -Dvaadin.pnpm.enable -Drun-it -Dvaadin.productionMode \
             -Dvaadin.force.production.build=true \
             $mode $args -pl "vaadin-$elements-flow-parent/vaadin-$elements-flow-integration-tests" -DskipUnitTests
