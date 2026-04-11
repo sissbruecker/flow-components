@@ -90,6 +90,7 @@
         <spotless.licence-header>${maven.multiModuleProjectDirectory}/scripts/templates/apache2-license-header.txt</spotless.licence-header>
         <spotless.npmExecutable/>
         <spotless.nodeExecutable/>
+        <vaadin.productionMode>false</vaadin.productionMode>
         <failsafe.forkCount>4</failsafe.forkCount>
         <com.vaadin.tests.SharedBrowser.reuseBrowser>true</com.vaadin.tests.SharedBrowser.reuseBrowser>
         <com.vaadin.testbench.Parameters.testsInParallel>1</com.vaadin.testbench.Parameters.testsInParallel>
@@ -369,7 +370,7 @@
                         <systemProperties>
                             <force>true</force>
                             <project.basedir>${project.basedir}</project.basedir>
-                            <vaadin.productionMode>false</vaadin.productionMode>
+                            <vaadin.productionMode>${vaadin.productionMode}</vaadin.productionMode>
                             <vaadin.reuseDevServer>true</vaadin.reuseDevServer>
                             <vaadin.frontend.hotdeploy>true</vaadin.frontend.hotdeploy>
                         </systemProperties>

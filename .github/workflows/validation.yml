@@ -82,6 +82,10 @@ jobs:
           mvn jetty:start-war -pl "$IT_MODULE" \
             $MAVEN_ARGS -DskipFrontend -Dvaadin.productionMode
 
+      - name: Wait for Jetty
+        run: |
+          timeout 120 bash -c 'until curl -sf -o /dev/null http://localhost:8080; do sleep 2; done'
+
       - name: Run Failsafe
         run: |
           mvn failsafe:integration-test failsafe:verify -pl "$IT_MODULE" \
