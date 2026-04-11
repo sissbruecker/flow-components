@@ -65,10 +65,9 @@ public abstract class AbstractComponentIT
             // Create new driver via parent chain
             super.setup();
             sharedDriver = getDriver();
+            // Set a default window size
+            testBench().resizeViewPortTo(1024, 800);
         }
-
-        // Set a default window size
-        testBench().resizeViewPortTo(1024, 800);
     }
 
     @AfterClass
