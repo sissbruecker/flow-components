@@ -23,7 +23,6 @@ import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -68,6 +67,7 @@ public abstract class AbstractComponentIT extends TestBenchTestCase {
             .getLogger(AbstractComponentIT.class);
 
     private static WebDriver sharedDriver;
+    private static ChromeDriverService sharedService;
 
     @Rule
     public ScreenshotOnFailureRule screenshotOnFailure = new ScreenshotOnFailureRule(
@@ -76,9 +76,10 @@ public abstract class AbstractComponentIT extends TestBenchTestCase {
     @BeforeClass
     public static void createDriver() {
         if (sharedDriver == null || !isDriverAlive(sharedDriver)) {
-            tryQuitDriver(sharedDriver);
             sharedDriver = createChromeDriver();
             sharedDriver.manage().window().setSize(new Dimension(1024, 800));
+            Runtime.getRuntime().addShutdownHook(
+                    new Thread(AbstractComponentIT::shutdownDriver));
         }
     }
 
@@ -87,14 +88,6 @@ public abstract class AbstractComponentIT extends TestBenchTestCase {
         setDriver(sharedDriver);
         getDriver().manage().deleteAllCookies();
         getDriver().navigate().to("about:blank");
-    }
-
-    @AfterClass
-    public static void quitDriver() {
-        if (sharedDriver != null) {
-            tryQuitDriver(sharedDriver);
-            sharedDriver = null;
-        }
     }
 
     // ----- Test path and URL resolution -----
@@ -168,11 +161,18 @@ public abstract class AbstractComponentIT extends TestBenchTestCase {
         }
     }
 
-    private static void tryQuitDriver(WebDriver driver) {
-        try {
-            driver.quit();
-        } catch (Exception e) {
-            // Ignore - driver may already be dead
+    private static void shutdownDriver() {
+        if (sharedDriver != null) {
+            try {
+                sharedDriver.quit();
+            } catch (Exception e) {
+                // Ignore - driver may already be dead
+            }
+            sharedDriver = null;
+        }
+        if (sharedService != null) {
+            sharedService.stop();
+            sharedService = null;
         }
     }
 
@@ -206,9 +206,9 @@ public abstract class AbstractComponentIT extends TestBenchTestCase {
         }
 
         int port = PortProber.findFreePort();
-        ChromeDriverService service = new ChromeDriverService.Builder()
-                .usingPort(port).withSilent(true).build();
-        ChromeDriver chromeDriver = new ChromeDriver(service, options);
+        sharedService = new ChromeDriverService.Builder().usingPort(port)
+                .withSilent(true).build();
+        ChromeDriver chromeDriver = new ChromeDriver(sharedService, options);
         return TestBench.createDriver(chromeDriver);
     }
 
