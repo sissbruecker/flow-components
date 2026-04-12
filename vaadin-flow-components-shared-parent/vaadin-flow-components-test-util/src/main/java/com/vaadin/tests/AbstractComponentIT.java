@@ -23,6 +23,8 @@ import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -30,6 +32,7 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.Dimension;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.WindowType;
 import org.openqa.selenium.WrapsDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeDriverService;
@@ -68,6 +71,7 @@ public abstract class AbstractComponentIT extends TestBenchTestCase {
 
     private static WebDriver sharedDriver;
     private static ChromeDriverService sharedService;
+    private static String initialWindowHandle;
 
     @Rule
     public ScreenshotOnFailureRule screenshotOnFailure = new ScreenshotOnFailureRule(
@@ -81,13 +85,37 @@ public abstract class AbstractComponentIT extends TestBenchTestCase {
             Runtime.getRuntime().addShutdownHook(
                     new Thread(AbstractComponentIT::shutdownDriver));
         }
+
+        // Open a separate tab for each test suite to potentially avoid issues
+        // with browser state being shared between tests
+        initialWindowHandle = sharedDriver.getWindowHandle();
+        sharedDriver.switchTo().newWindow(WindowType.TAB);
+    }
+
+    @AfterClass
+    public static void closeSuiteTab() {
+        // Close the tab opened for the test suite and switch back to the
+        // initial tab
+        sharedDriver.close();
+        sharedDriver.switchTo().window(initialWindowHandle);
     }
 
     @Before
-    public void resetDriver() throws Exception {
+    public void setupPage() throws Exception {
         setDriver(sharedDriver);
-        getDriver().manage().deleteAllCookies();
-        getDriver().navigate().to("about:blank");
+    }
+
+    @After
+    public void resetPage() throws Exception {
+        // Delete cookies while still on the app origin to force a new Vaadin
+        // session on the next navigation
+        sharedDriver.manage().deleteAllCookies();
+        // Reset the page to a blank state after each test to minimize
+        // interference between tests
+        sharedDriver.get("about:blank");
+        // Drain browser logs so errors from this test don't leak into
+        // the next test's checkLogsForErrors() call
+        sharedDriver.manage().logs().get(LogType.BROWSER);
     }
 
     // ----- Test path and URL resolution -----
