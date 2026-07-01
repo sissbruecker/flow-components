@@ -30,7 +30,6 @@ import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.DomEvent;
 import com.vaadin.flow.component.EventData;
-import com.vaadin.flow.component.HasAriaRole;
 import com.vaadin.flow.component.HasComponents;
 import com.vaadin.flow.component.HasSize;
 import com.vaadin.flow.component.HasStyle;
@@ -86,7 +85,7 @@ import com.vaadin.flow.signals.Signal;
 @JsModule("./flow-component-renderer.js")
 @ModalRoot
 public class Dialog extends Component implements HasComponents, HasSize,
-        HasStyle, HasThemeVariant<DialogVariant>, HasAriaRole {
+        HasStyle, HasThemeVariant<DialogVariant> {
 
     private static final String OVERLAY_LOCATOR_JS = "this.$.overlay";
 
@@ -130,7 +129,7 @@ public class Dialog extends Component implements HasComponents, HasSize,
             setLeft(event.getLeft());
         });
 
-        setAriaRole("dialog");
+        setRole("dialog");
 
         // Initialize auto-add behavior
         new OverlayAutoAddController<>(this, this::getModality);
@@ -1255,13 +1254,11 @@ public class Dialog extends Component implements HasComponents, HasSize,
      *
      * @param role
      *            the role to set
-     * @deprecated Use {@link #setAriaRole(String)} instead
      */
-    @Deprecated(since = "25.3", forRemoval = true)
     public void setRole(String role) {
         Objects.requireNonNull(role, "Role cannot be null");
 
-        setAriaRole(role);
+        getElement().setProperty("role", role);
     }
 
     /**
@@ -1269,13 +1266,13 @@ public class Dialog extends Component implements HasComponents, HasSize,
      *
      * @param role
      *            the role to set
-     * @deprecated Use {@link #setAriaRole(String)} instead
+     * @deprecated Use {@link #setRole(String)} instead
      */
     @Deprecated(since = "25.0", forRemoval = true)
     public void setOverlayRole(String role) {
         Objects.requireNonNull(role, "Role cannot be null");
 
-        setAriaRole(role);
+        setRole(role);
     }
 
     /**
@@ -1283,11 +1280,9 @@ public class Dialog extends Component implements HasComponents, HasSize,
      * Defaults to {@code dialog}.
      *
      * @return the role
-     * @deprecated Use {@link #getAriaRole()} instead
      */
-    @Deprecated(since = "25.3", forRemoval = true)
     public String getRole() {
-        return getAriaRole().orElse(null);
+        return getElement().getProperty("role");
     }
 
     /**
@@ -1295,11 +1290,11 @@ public class Dialog extends Component implements HasComponents, HasSize,
      * Defaults to {@code dialog}.
      *
      * @return the role
-     * @deprecated Use {@link #getAriaRole()} instead
+     * @deprecated Use {@link #getRole()} instead
      */
     @Deprecated(since = "25.0", forRemoval = true)
     public String getOverlayRole() {
-        return getAriaRole().orElse(null);
+        return getRole();
     }
 
     /**
