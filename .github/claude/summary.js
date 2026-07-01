@@ -51,9 +51,11 @@ function formatCost(usd) {
   return typeof usd === 'number' ? `$${usd.toFixed(4)}` : '—';
 }
 
-function truncate(text, max) {
-  const oneLine = text.replace(/\s+/g, ' ').trim();
-  return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine;
+// Show the bare command/url for the common single-field tool inputs; fall
+// back to the raw JSON for anything else.
+function denialInput(input) {
+  if (!input) return '';
+  return input.command ?? input.url ?? JSON.stringify(input);
 }
 
 // The outcome is "success" or one of several error subtypes; is_error also
@@ -69,7 +71,7 @@ function renderSessionSummary(result) {
   const lines = [];
   lines.push('## Claude Code session');
   lines.push('');
-  lines.push('| | |');
+  lines.push('| Description | Value |');
   lines.push('|---|---|');
   lines.push(`| Outcome | ${outcomeLabel(result)} |`);
   lines.push(`| Turns | ${result.num_turns ?? '—'} |`);
@@ -137,8 +139,7 @@ function renderPermissionDenials(result) {
   lines.push('| Count | Tool | Example input |');
   lines.push('|--:|---|---|');
   for (const { tool, count, sample } of groupDenials(denials)) {
-    const input = sample ? truncate(JSON.stringify(sample), 100) : '';
-    lines.push(`| ${count} | \`${tool}\` | \`${input}\` |`);
+    lines.push(`| ${count} | \`${tool}\` | \`${denialInput(sample)}\` |`);
   }
   lines.push('');
   return lines;
