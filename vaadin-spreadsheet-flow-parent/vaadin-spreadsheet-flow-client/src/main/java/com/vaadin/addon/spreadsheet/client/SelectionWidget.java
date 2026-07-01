@@ -28,6 +28,7 @@ import com.google.gwt.user.client.ui.PopupPanel.PositionCallback;
 import com.google.gwt.user.client.ui.Widget;
 import com.vaadin.client.MeasuredSize;
 import com.vaadin.client.WidgetUtil;
+import com.vaadin.client.ui.VOverlay;
 
 public class SelectionWidget extends Composite {
 
@@ -575,7 +576,7 @@ public class SelectionWidget extends Composite {
     private int selectionStartCol;
     private int selectionStartRow;
 
-    private SpreadsheetOverlay touchActions;
+    private VOverlay touchActions;
 
     private boolean dragging;
 
@@ -858,7 +859,6 @@ public class SelectionWidget extends Composite {
             }
 
             touchActions = new SpreadsheetOverlay(true);
-            touchActions.setOverlayContainer(sheetWidget.getOverlayContainer());
             touchActions.setOwner((Widget) sheetWidget.actionHandler);
             touchActions.addStyleName("v-contextmenu");
 

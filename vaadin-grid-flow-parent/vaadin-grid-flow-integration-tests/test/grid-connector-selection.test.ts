@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { fixtureSync, nextFrame } from '@vaadin/testing-helpers';
 import { init, getBodyCellContent, setRootItems } from './shared.js';
-import type { FlowGrid, Item } from './shared.js';
+import type { FlowGrid } from './shared.js';
 import sinon from 'sinon';
 
 describe('grid connector - selection', () => {
@@ -71,27 +71,6 @@ describe('grid connector - selection', () => {
       grid.disabled = true;
       getBodyCellContent(grid, 0, 0)!.click();
       expect(grid.selectedItems).to.be.empty;
-      expect(grid.$server.select.called).to.be.false;
-    });
-
-    it('should not deselect item on click when grid is disabled', async () => {
-      grid.$connector.doSelection([{ key: '0' }], false);
-      grid.disabled = true;
-      getBodyCellContent(grid, 0, 0)!.click();
-      expect(grid.selectedItems).to.have.lengthOf(1);
-      expect(grid.$server.deselect.called).to.be.false;
-    });
-
-    it('should not request deselect for an active item that is not selected', () => {
-      // Select an item by clicking it
-      getBodyCellContent(grid, 0, 0)!.click();
-
-      // Deselect the item from the server
-      grid.$connector.doDeselection([{ key: '0' }], false);
-
-      // Click the item again to clear the active item
-      getBodyCellContent(grid, 0, 0)!.click();
-      expect(grid.$server.deselect.called).to.be.false;
     });
 
     it('should select on server', () => {
@@ -135,20 +114,6 @@ describe('grid connector - selection', () => {
         expect(grid.selectedItems[0].key).to.equal('0');
       });
 
-      it('should apply selection from server when grid is disabled', async () => {
-        grid.disabled = true;
-        await nextFrame();
-        grid.$connector.doSelection([{ key: '0' }], false);
-        expect(grid.selectedItems).to.have.lengthOf(1);
-        expect(grid.selectedItems[0].key).to.equal('0');
-      });
-
-      it('should deselect cleared items', () => {
-        grid.$connector.doSelection([{ key: '0' }], false);
-        grid.$connector.clear(0, 2);
-        expect(grid.selectedItems).to.be.empty;
-      });
-
       it('should update activeItem when selecting an item', () => {
         grid.$connector.doSelection([{ key: '0' }], false);
         expect(grid.activeItem).to.deep.equal({ key: '0', selected: true });
@@ -179,7 +144,7 @@ describe('grid connector - selection', () => {
     });
 
     describe('conditional selection', () => {
-      let items: Item[];
+      let items;
 
       beforeEach(async () => {
         items = Array.from({ length: 4 }, (_, i) => ({
@@ -227,7 +192,7 @@ describe('grid connector - selection', () => {
         setRootItems(grid.$connector, updatedItems);
 
         // active item still references the original item with selectable: true
-        expect(grid.activeItem!.selectable).to.be.true;
+        expect(grid.activeItem.selectable).to.be.true;
 
         // however clicking the row should not deselect the item
         getBodyCellContent(grid, 2, 0)!.click();

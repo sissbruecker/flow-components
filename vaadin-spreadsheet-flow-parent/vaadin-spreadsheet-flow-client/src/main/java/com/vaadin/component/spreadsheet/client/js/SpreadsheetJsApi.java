@@ -50,28 +50,23 @@ public class SpreadsheetJsApi {
     private Map<String, PopupButtonState> popupButtonStates = new HashMap<>();
 
     /**
-     * receives the host element, the render root where the widget must be
-     * embedded into, and the overlay container element where spreadsheet
-     * overlays (context menu, tooltips, comments, popup buttons) will be
-     * attached. Publishes the methods which can be used from JS.
+     * receives the host element and the render root where the widget must be
+     * embedded into, and publishes the methods which can be used from JS
      *
      * @param host
      *            the host element
      * @param renderRoot
      *            render root of the host
-     * @param overlayContainer
-     *            element that receives spreadsheet overlays
      */
-    public SpreadsheetJsApi(Element host, Node renderRoot,
-            Element overlayContainer) {
+    public SpreadsheetJsApi(Element host, Node renderRoot) {
         if (host != null) {
-            init(host, renderRoot, overlayContainer);
+            init(host, renderRoot);
         }
     }
 
-    private void init(Element host, Node renderRoot, Element overlayContainer) {
+    private void init(Element host, Node renderRoot) {
         spreadsheetConnector = new SpreadsheetConnector();
-        spreadsheetConnector.setHost(host, renderRoot, overlayContainer);
+        spreadsheetConnector.setHost(host, renderRoot);
         spreadsheetConnector.doInit("1", new ApplicationConnection());
         spreadsheetWidget = spreadsheetConnector.getWidget();
         RootPanel.getForElement((Element) renderRoot).add(spreadsheetWidget);

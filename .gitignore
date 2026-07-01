@@ -20,7 +20,6 @@ pom.xml.bak
 .vscode
 types.d.ts
 tsconfig.json
-!**/test/tsconfig.json
 webpack.*
 vite.generated.ts
 /vite.config.ts
@@ -30,7 +29,6 @@ node_modules
 !/package.json
 !/package-lock.json
 pnpm*
-!**/pnpm-workspace.yaml
 .npmrc
 .pnpmfile.cjs
 error-screenshots
@@ -39,6 +37,7 @@ error-screenshots
 **/frontend/index.html
 **/frontend/*.tsx
 dev-bundle
+prod.bundle
 .vaadin-node-tasks.lock
 
 # Claude Code

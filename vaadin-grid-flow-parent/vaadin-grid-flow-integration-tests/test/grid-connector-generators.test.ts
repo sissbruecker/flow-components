@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { fixtureSync, nextFrame } from '@vaadin/testing-helpers';
 import { init, setRootItems, getBodyCell } from './shared.js';
 import type { FlowGrid } from './shared.js';
-import type { GridColumn } from '@vaadin/grid/vaadin-grid-column.js';
+import { GridColumn } from '@vaadin/grid';
 
 describe('grid connector - generators', () => {
   let grid: FlowGrid;

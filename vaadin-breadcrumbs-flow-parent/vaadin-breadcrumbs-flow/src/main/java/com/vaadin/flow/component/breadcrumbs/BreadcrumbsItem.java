@@ -19,18 +19,12 @@ import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentUtil;
 import com.vaadin.flow.component.HasEnabled;
 import com.vaadin.flow.component.HasText;
-import com.vaadin.flow.component.SignalPropertySupport;
 import com.vaadin.flow.component.Tag;
-import com.vaadin.flow.component.Text;
 import com.vaadin.flow.component.dependency.JsModule;
 import com.vaadin.flow.component.dependency.NpmPackage;
 import com.vaadin.flow.component.shared.HasPrefix;
-import com.vaadin.flow.dom.SignalBinding;
-import com.vaadin.flow.internal.UrlUtil;
 import com.vaadin.flow.router.RouteConfiguration;
 import com.vaadin.flow.router.RouteParameters;
-import com.vaadin.flow.server.InitParameters;
-import com.vaadin.flow.signals.Signal;
 
 /**
  * An item of the {@link Breadcrumbs} component, representing a single entry in
@@ -46,15 +40,10 @@ import com.vaadin.flow.signals.Signal;
  * @author Vaadin Ltd
  */
 @Tag("vaadin-breadcrumbs-item")
-@NpmPackage(value = "@vaadin/breadcrumbs", version = "25.2.0")
+@NpmPackage(value = "@vaadin/breadcrumbs", version = "25.2.0-beta2")
 @JsModule("@vaadin/breadcrumbs/src/vaadin-breadcrumbs-item.js")
 public class BreadcrumbsItem extends Component
         implements HasText, HasEnabled, HasPrefix {
-
-    private final Text textNode = new Text("");
-
-    private final SignalPropertySupport<String> textSupport = SignalPropertySupport
-            .create(this, this::updateText);
 
     /**
      * Creates a breadcrumbs item with the given text and no path. An item
@@ -75,11 +64,6 @@ public class BreadcrumbsItem extends Component
      *            the text of the item
      * @param path
      *            the path to link to
-     * @throws IllegalArgumentException
-     *             if {@code path} uses a scheme that is not considered safe;
-     *             see {@link #setUnsafePath(String)} and the
-     *             {@value InitParameters#URL_SAFE_SCHEMES} configuration
-     *             property
      */
     public BreadcrumbsItem(String text, String path) {
         setPath(path);
@@ -127,11 +111,6 @@ public class BreadcrumbsItem extends Component
      *            the path to link to
      * @param prefixComponent
      *            the prefix component for the item (usually an icon)
-     * @throws IllegalArgumentException
-     *             if {@code path} uses a scheme that is not considered safe;
-     *             see {@link #setUnsafePath(String)} and the
-     *             {@value InitParameters#URL_SAFE_SCHEMES} configuration
-     *             property
      */
     public BreadcrumbsItem(String text, String path,
             Component prefixComponent) {
@@ -176,45 +155,6 @@ public class BreadcrumbsItem extends Component
     }
 
     /**
-     * Sets the given string as the text content of this item.
-     * <p>
-     * This method removes any existing content in the default slot and replaces
-     * it with the given text. Other slotted children (such as the prefix) are
-     * preserved.
-     *
-     * @param text
-     *            the text content to set, or {@code null} to remove existing
-     *            text
-     */
-    @Override
-    public void setText(String text) {
-        textSupport.set(text);
-    }
-
-    @Override
-    public String getText() {
-        return textSupport.get();
-    }
-
-    @Override
-    public SignalBinding<String> bindText(Signal<String> textSignal) {
-        return textSupport.bind(textSignal);
-    }
-
-    private void updateText(String text) {
-        textNode.setText(text);
-
-        if (text == null || text.isEmpty()) {
-            textNode.removeFromParent();
-            return;
-        }
-
-        if (textNode.getParent().isEmpty()) {
-            getElement().appendChild(textNode.getElement());
-        }
-    }
-
-    /**
      * Gets the path this item links to.
      *
      * @return the path this item links to, or {@code null} if the item has no
@@ -237,33 +177,6 @@ public class BreadcrumbsItem extends Component
      * @see #setPath(Class)
      */
     public void setPath(String path) {
-        if (path != null && !UrlUtil.isSafeUrl(path)) {
-            throw new IllegalArgumentException(UrlUtil.getUnsafeUrlMessage(
-                    "path", path, "setUnsafePath(String)"));
-        }
-        doSetPath(path);
-    }
-
-    /**
-     * Sets the path this item links to without validating its scheme.
-     * <p>
-     * Unlike {@link #setPath(String)}, this method does not reject paths based
-     * on the {@value InitParameters#URL_SAFE_SCHEMES} configuration. Use it
-     * only for paths that are fully under your control and known to be safe,
-     * such as a hard-coded {@code javascript:} URL. Passing untrusted input
-     * here can expose the application to cross-site scripting (XSS) attacks.
-     *
-     * @see #setPath(String)
-     *
-     * @param path
-     *            the path to link to, or {@code null} to remove the path and
-     *            render the item as the current page (a non-link)
-     */
-    public void setUnsafePath(String path) {
-        doSetPath(path);
-    }
-
-    private void doSetPath(String path) {
         if (path == null) {
             getElement().removeAttribute("path");
         } else {

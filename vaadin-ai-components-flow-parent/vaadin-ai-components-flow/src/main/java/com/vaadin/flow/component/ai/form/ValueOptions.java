@@ -20,43 +20,51 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasValue;
-import com.vaadin.flow.component.ItemLabelGenerator;
 import com.vaadin.flow.data.selection.MultiSelect;
 
 /**
- * Per-field registration of the items the LLM may pick from. Items carry the
- * field's value type — a {@code ComboBox<Project>} registration passes
- * {@code Project} items, not pre-rendered strings. Pass the configured
- * registration to {@link FormAIController#fieldValueOptions(ValueOptions)
- * controller.fieldValueOptions(...)} to apply it.
+ * Per-field options registration passed to
+ * {@link FormAIController#valueOptions(ValueOptions)
+ * controller.valueOptions(...)}. Carries the field together with either a fixed
+ * label list or a query callback. The label-to-value converter is supplied
+ * separately to the controller at registration time, not on this object — see
+ * {@link FormAIController#valueOptions(ValueOptions, Function)
+ * valueOptions(config, toValue)}.
  * <p>
- * The item set is either fixed ({@link #options(Collection)}) or supplied on
- * demand by a callback ({@link #options(BiFunction)}); exactly one must be set,
- * with the last call winning. Each item is rendered to an LLM-facing label
- * through this chain: the explicit
- * {@link #itemLabelGenerator(ItemLabelGenerator)} if set, otherwise the field's
- * own {@code setItemLabelGenerator(...)} (read reflectively), otherwise
- * {@link String#valueOf(Object)}. The controller resolves a chosen label back
- * to an item by applying the same chain to each registered item and returning
- * the first whose label matches, so the field's UI label generator drives the
- * AI labels automatically.
+ * Two {@code forField} factories cover all field shapes:
+ * <ul>
+ * <li>{@link #forField(HasValue)} — single-value fields. The type parameter
+ * {@code V} of the field flows through.</li>
+ * <li>{@link #forField(MultiSelect)} — multi-select fields. Picked by the
+ * compiler whenever the reference is statically typed as {@link MultiSelect}.
+ * The per-element type flows through; the controller aggregates resolved
+ * per-label items into a {@link LinkedHashSet} before
+ * {@link HasValue#setValue}.</li>
+ * </ul>
+ * Exactly one of {@link #options(Collection)} (fixed labels) and
+ * {@link #options(BiFunction)} (queryable labels) must be set; calling one
+ * clears the other so the last setter wins.
  *
- * @param <V>
- *            the item type — the field's value type for single-value fields,
- *            the per-element type for multi-select fields
+ * @param <I>
+ *            the per-label item type the controller's converter must produce.
+ *            For a single-value field {@code I} is the field's value type; for
+ *            a multi-select field {@code I} is the per-element type. The
+ *            controller's {@code valueOptions(...)} overload set enforces at
+ *            compile time that a converter is supplied for every {@code I}
+ *            other than {@link String}
  *
  * @author Vaadin Ltd
  */
-public final class ValueOptions<V> {
+public final class ValueOptions<I> {
 
     private final HasValue<?, ?> field;
     private final boolean multi;
-    private BiFunction<String, Integer, List<V>> query;
-    private List<V> fixedOptions;
-    private ItemLabelGenerator<V> itemLabelGenerator;
+    private BiFunction<String, Integer, List<String>> query;
+    private List<String> fixedOptions;
 
     private ValueOptions(HasValue<?, ?> field, boolean multi) {
         this.field = field;
@@ -64,16 +72,20 @@ public final class ValueOptions<V> {
     }
 
     /**
-     * Starts an options registration for a single-value field. The field's
-     * value type {@code V} flows through unchanged.
+     * Starts a single-value options registration. The field's value type
+     * {@code V} flows through; for a {@code V} other than {@link String}, the
+     * controller's two-argument
+     * {@link FormAIController#valueOptions(ValueOptions, Function)} overload
+     * must be used to supply a converter — that is a compile-time requirement,
+     * not a runtime check.
      *
      * @param field
      *            the single-value field whose options the LLM may pick from,
      *            not {@code null}
      * @param <V>
      *            the field's value type
-     * @return a fresh registration ready to receive
-     *         {@link #options(Collection)} or {@link #options(BiFunction)}
+     * @return a fresh registration ready to receive {@link #options(Collection)
+     *         options(...)}
      */
     public static <V> ValueOptions<V> forField(HasValue<?, V> field) {
         Objects.requireNonNull(field, "Field must not be null");
@@ -81,10 +93,12 @@ public final class ValueOptions<V> {
     }
 
     /**
-     * Starts an options registration for a multi-select field. Picked by the
-     * compiler over {@link #forField(HasValue)} whenever the reference is
-     * statically typed as {@link MultiSelect}. The per-element type {@code T}
-     * flows through unchanged; resolved items are aggregated into a
+     * Starts a multi-select options registration. Picked by the compiler over
+     * {@link #forField(HasValue)} whenever the reference is statically typed as
+     * {@link MultiSelect}. The per-element type flows through; for any type
+     * other than {@link String}, the controller's two-argument
+     * {@link FormAIController#valueOptions(ValueOptions, Function)} overload
+     * must be used. The controller aggregates resolved per-label items into a
      * {@link LinkedHashSet} before {@link HasValue#setValue}.
      *
      * @param field
@@ -94,8 +108,8 @@ public final class ValueOptions<V> {
      *            the per-element type
      * @param <C>
      *            the field's source-component type
-     * @return a fresh registration ready to receive
-     *         {@link #options(Collection)} or {@link #options(BiFunction)}
+     * @return a fresh registration ready to receive {@link #options(Collection)
+     *         options(...)}
      */
     public static <T, C extends Component> ValueOptions<T> forField(
             MultiSelect<C, T> field) {
@@ -104,23 +118,20 @@ public final class ValueOptions<V> {
     }
 
     /**
-     * Sets a fixed item list. A defensive copy is taken so later mutations of
-     * the caller's collection have no effect. Use this when the option set is
-     * known up front and small enough to enumerate; for large or dynamic sets
-     * use {@link #options(BiFunction)} instead. Mutually exclusive with
+     * Sets a fixed label list. A defensive copy is taken so later mutations of
+     * the caller's collection have no effect. Mutually exclusive with
      * {@link #options(BiFunction)} — calling either clears the other.
      *
      * @param options
-     *            the items the LLM may pick from, not {@code null} and not
-     *            empty; each item is rendered to an LLM-facing label through
-     *            the chain documented on the class JavaDoc
+     *            the labels the LLM may pick from, not {@code null} and not
+     *            empty
      * @return this registration, for chaining
      * @throws IllegalArgumentException
      *             if {@code options} is empty — registering an empty fixed list
      *             leaves the field un-fillable and is always a developer
      *             mistake
      */
-    public ValueOptions<V> options(Collection<V> options) {
+    public ValueOptions<I> options(Collection<String> options) {
         Objects.requireNonNull(options, "Options must not be null");
         if (options.isEmpty()) {
             throw new IllegalArgumentException("Options must not be empty");
@@ -131,50 +142,20 @@ public final class ValueOptions<V> {
     }
 
     /**
-     * Sets a callback the controller invokes whenever the LLM needs to see the
-     * field's options. Use this when the option set is too large or too dynamic
-     * for a fixed list via {@link #options(Collection)} — for example options
-     * that come from a database query or a remote service. The callback returns
-     * items the LLM may pick from; each item is rendered to an LLM-facing label
-     * through the chain documented on the class JavaDoc. Mutually exclusive
-     * with {@link #options(Collection)} — calling either clears the other.
+     * Sets a queryable label callback the LLM drives via
+     * {@code query_field_options}. Mutually exclusive with
+     * {@link #options(Collection)} — calling either clears the other.
      *
      * @param query
-     *            invoked with two arguments: a filter string the LLM picked,
-     *            and a positive limit on how many items to return. Returns the
-     *            matching items in display order, not {@code null} (an empty
-     *            list signals "no matches" to the LLM)
+     *            the filter callback returning labels for the LLM, not
+     *            {@code null}
      * @return this registration, for chaining
      */
-    public ValueOptions<V> options(BiFunction<String, Integer, List<V>> query) {
+    public ValueOptions<I> options(
+            BiFunction<String, Integer, List<String>> query) {
         Objects.requireNonNull(query, "Options query must not be null");
         this.query = query;
         this.fixedOptions = null;
-        return this;
-    }
-
-    /**
-     * Sets the item-to-label function the controller uses to derive the
-     * LLM-facing label for each item. Optional — when unset, the controller
-     * falls back to the field's own {@code getItemLabelGenerator()} (read
-     * reflectively), then to {@link String#valueOf(Object)} as a last resort.
-     * Set this when the field's UI label generator is absent or when the LLM
-     * needs a different label from the UI (for example a code rather than a
-     * display name). Calling this multiple times overwrites the previous value.
-     * <p>
-     * Two items rendering to the same label are resolvable but ambiguous:
-     * resolution picks the first matching item in registration order, and the
-     * controller logs a warning at registration when this happens. Emit unique
-     * labels per item if disambiguation matters.
-     *
-     * @param generator
-     *            the per-item label generator, not {@code null}
-     * @return this registration, for chaining
-     */
-    public ValueOptions<V> itemLabelGenerator(ItemLabelGenerator<V> generator) {
-        Objects.requireNonNull(generator,
-                "Item label generator must not be null");
-        this.itemLabelGenerator = generator;
         return this;
     }
 
@@ -186,15 +167,11 @@ public final class ValueOptions<V> {
         return multi;
     }
 
-    BiFunction<String, Integer, List<V>> query() {
+    BiFunction<String, Integer, List<String>> query() {
         return query;
     }
 
-    List<V> fixedOptions() {
+    List<String> fixedOptions() {
         return fixedOptions;
-    }
-
-    ItemLabelGenerator<V> itemLabelGenerator() {
-        return itemLabelGenerator;
     }
 }

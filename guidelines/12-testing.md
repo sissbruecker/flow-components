@@ -47,19 +47,8 @@ void isSerializable() throws Exception {
 }
 ```
 
-### Interface test
-
-Assert a component declares an expected mixin interface:
-
-```java
-@Test
-void implementsHasThemeVariant() {
-    Assertions.assertTrue(
-            HasThemeVariant.class.isAssignableFrom(Breadcrumbs.class));
-}
-```
-
-Also add `{Component}I18nTest` where applicable.
+Also add `{Component}VariantTest` (each enum value → expected token) and
+`{Component}I18nTest` where applicable.
 
 ## TestBench element
 
@@ -82,9 +71,7 @@ for common interactions (`open()`, `selectByText(String)`). Keep it lean.
 JUnit 4 + TestBench, served by Jetty, extending `AbstractComponentIT`. A test
 view (`{Component}Page` under `src/main/.../tests`) with `@Route` exposes
 elements by `id`; the IT (`{Component}IT` under `src/test/.../tests`) with a
-matching `@TestPath` drives a real browser. The module includes a
-`TestAppShell` (`AppShellConfigurator`) applying the Lumo theme, so ITs run
-against Lumo-styled components.
+matching `@TestPath` drives a real browser.
 
 ```java
 @TestPath("vaadin-example")

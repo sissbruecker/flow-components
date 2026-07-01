@@ -75,7 +75,7 @@ class LoginOverlayTest {
 
         Logger mockedLogger = Mockito.mock(Logger.class);
         try (MockedStatic<LoggerFactory> context = Mockito
-                .mockStatic(LoggerFactory.class, Mockito.CALLS_REAL_METHODS)) {
+                .mockStatic(LoggerFactory.class)) {
             context.when(() -> LoggerFactory.getLogger(LoginOverlay.class))
                     .thenReturn(mockedLogger);
 
@@ -104,7 +104,7 @@ class LoginOverlayTest {
 
         Logger mockedLogger = Mockito.mock(Logger.class);
         try (MockedStatic<LoggerFactory> context = Mockito
-                .mockStatic(LoggerFactory.class, Mockito.CALLS_REAL_METHODS)) {
+                .mockStatic(LoggerFactory.class)) {
             context.when(() -> LoggerFactory.getLogger(LoginOverlay.class))
                     .thenReturn(mockedLogger);
 

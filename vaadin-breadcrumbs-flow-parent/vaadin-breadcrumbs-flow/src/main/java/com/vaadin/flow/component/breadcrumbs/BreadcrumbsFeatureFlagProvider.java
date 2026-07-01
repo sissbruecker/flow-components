@@ -35,7 +35,7 @@ public class BreadcrumbsFeatureFlagProvider implements FeatureFlagProvider {
     public static final Feature BREADCRUMBS_COMPONENT = new Feature(
             "Breadcrumbs component", // title
             "breadcrumbsComponent", // id
-            "https://vaadin.com/docs/latest/components/breadcrumbs", // moreInfoLink
+            "https://github.com/vaadin/web-components/issues/7960", // moreInfoLink
             true, // requiresServerRestart
             "com.vaadin.flow.component.breadcrumbs.Breadcrumbs"); // componentClassName
 

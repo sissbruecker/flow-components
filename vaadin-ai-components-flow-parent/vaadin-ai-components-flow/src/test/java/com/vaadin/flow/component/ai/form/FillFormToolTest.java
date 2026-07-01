@@ -15,7 +15,6 @@
  */
 package com.vaadin.flow.component.ai.form;
 
-import static com.vaadin.flow.component.ai.form.FormTestSupport.executeQueryFieldOptions;
 import static com.vaadin.flow.component.ai.form.FormTestSupport.findTool;
 import static com.vaadin.flow.component.ai.form.FormTestSupport.idOf;
 
@@ -25,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.Assertions;
@@ -43,6 +43,7 @@ import com.vaadin.flow.component.ai.form.FormTestFields.DoubleField;
 import com.vaadin.flow.component.ai.form.FormTestFields.IntField;
 import com.vaadin.flow.component.ai.form.FormTestFields.LabeledStringField;
 import com.vaadin.flow.component.ai.form.FormTestFields.MultiSelectField;
+import com.vaadin.flow.component.ai.form.FormTestFields.Project;
 import com.vaadin.flow.component.ai.form.FormTestFields.SingleSelectField;
 import com.vaadin.flow.component.ai.form.FormTestFields.TestField;
 import com.vaadin.flow.component.ai.form.FormTestFields.TimeField;
@@ -143,7 +144,7 @@ class FillFormToolTest {
         secret.setLabel("Secret");
         secret.setValue("classified");
         var controller = controllerFor(visible, secret);
-        controller.ignoreField(secret);
+        controller.ignore(secret);
 
         var raw = fillFormPayload(controller, payload(visible, "\"Acme\""));
 
@@ -153,34 +154,6 @@ class FillFormToolTest {
                 "Ignored field's label must not appear, got: " + raw);
         Assertions.assertFalse(raw.contains("classified"),
                 "Ignored field's value must not appear, got: " + raw);
-    }
-
-    @Test
-    void fillForm_writesFieldsButMasksValuesWhenValuesHidden() {
-        // setFieldValuesHidden keeps every field writable: the AI can fill
-        // them.
-        // The writes must land, but the response must still mask the values
-        // (null + valueHidden) rather than echoing what was written.
-        var name = new LabeledStringField();
-        name.setLabel("Name");
-        var controller = controllerFor(name);
-        controller.setFieldValuesHidden(true);
-
-        var result = fillFormResult(controller, payload(name, "\"Acme Corp\""));
-
-        Assertions.assertEquals("Acme Corp", name.getValue(),
-                "Field must still accept the write while values are hidden");
-        Assertions.assertTrue(success(result),
-                "Write must not be rejected, got: " + result);
-        var node = fieldEntry(result, idOf(name));
-        Assertions.assertTrue(node.path("value").isNull(),
-                "Response must mask the value, got: " + node);
-        Assertions.assertTrue(node.path("valueHidden").asBoolean(false),
-                "Response must flag the masked value, got: " + node);
-        Assertions.assertFalse(
-                fillFormPayload(controller, payload(name, "\"Acme Corp\""))
-                        .contains("Acme Corp"),
-                "The written value must never appear in the response");
     }
 
     @Test
@@ -548,7 +521,7 @@ class FillFormToolTest {
         secret.setLabel("Secret");
         secret.setValue("original");
         var controller = controllerFor(visible, secret);
-        controller.ignoreField(secret);
+        controller.ignore(secret);
 
         var args = JacksonUtils.createObjectNode();
         args.put(idOf(visible), "set");
@@ -1288,50 +1261,31 @@ class FillFormToolTest {
     }
 
     @Test
-    void fillForm_singleSelect_stringValueWithCustomLabeler_writesOriginalItem() {
-        // V=String with a custom ValueOptions.itemLabelGenerator: the LLM
-        // is shown short codes; the field must receive the original full
-        // string, not the code the LLM sent back.
-        var field = new SingleSelectField<String>();
-        var controller = newController(field);
-        controller.fieldValueOptions(ValueOptions.forField(field)
-                .options(List.of("Premium", "Basic"))
-                .itemLabelGenerator(s -> s.substring(0, 1)));
-        controller.onRequest();
-
-        var result = fillFormResult(controller, payload(field, "\"P\""));
-
-        Assertions.assertEquals("Premium", field.getValue(),
-                "Field must receive the original item, not the labeled "
-                        + "short code");
-        Assertions.assertTrue(success(result));
-    }
-
-    @Test
-    void fillForm_singleSelect_writesResolvedValueViaValueOptions() {
-        // The field must receive the original domain item that the labeler
-        // renders to the LLM-supplied label, not the raw label string.
-        var apollo = new Project("P-1", "Apollo");
+    void fillForm_singleSelect_writesResolvedValueViaValueOptionsToValue() {
+        // The LLM speaks in labels for SINGLE_SELECT fields with
+        // valueOptions registered. The tool must apply toValue so the
+        // field gets the domain instance, not the raw label string.
         var field = new SingleSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
+        var projects = Map.of("Apollo", new Project("P-1", "Apollo"));
         var controller = newController(field);
-        controller.fieldValueOptions(
-                ValueOptions.forField(field).options(List.of(apollo)));
+        controller.valueOptions(ValueOptions.forField(field)
+                .options((filter, limit) -> List.of("Apollo")), projects::get);
         controller.onRequest();
 
         var result = fillFormResult(controller, payload(field, "\"Apollo\""));
 
-        Assertions.assertEquals(apollo, field.getValue(),
-                "Field must receive the registered domain object");
+        Assertions.assertEquals(new Project("P-1", "Apollo"), field.getValue(),
+                "Field must receive the resolved domain object, not the "
+                        + "raw label string");
         Assertions.assertTrue(success(result));
     }
 
     @Test
     void fillForm_singleSelect_withoutValueOptionsIsRejectedWithHint() {
-        // SINGLE_SELECT without a fieldValueOptions registration and no
-        // eager setItems(...) has no option source at all. The fill must
-        // fail loudly with a reason that points at the missing registration
-        // so the developer can fix it.
+        // SINGLE_SELECT without a valueOptions registration means the
+        // LLM has no labels to pick and the converter has no toValue to
+        // resolve. The fill must fail loudly with a reason that points
+        // at the missing registration so the developer can fix it.
         var field = new SingleSelectField<Project>();
         var controller = controllerFor(field);
 
@@ -1341,9 +1295,8 @@ class FillFormToolTest {
         Assertions.assertFalse(success(result));
         Assertions.assertEquals(List.of(idOf(field)), rejectedIds(result));
         Assertions.assertTrue(
-                rejectionReason(result, idOf(field))
-                        .contains("fieldValueOptions"),
-                "Reason must point at the missing fieldValueOptions "
+                rejectionReason(result, idOf(field)).contains("valueOptions"),
+                "Reason must point at the missing valueOptions "
                         + "registration; got: "
                         + rejectionReason(result, idOf(field)));
     }
@@ -1355,7 +1308,7 @@ class FillFormToolTest {
         // already surfaces its items as `enum`. The converter must resolve
         // an LLM-supplied label against those items via
         // FormValueConverter.renderItem so the field is writable without
-        // also requiring FormAIController.fieldValueOptions(...).
+        // also requiring FormAIController.valueOptions(...).
         var field = new SingleSelectField<String>();
         field.setItems("EUR", "USD", "GBP");
         var controller = controllerFor(field);
@@ -1412,15 +1365,13 @@ class FillFormToolTest {
 
     @Test
     void fillForm_singleSelect_unknownLabelIsRejected() {
-        // A label that matches no registered item must reject rather than
-        // silently clear the field; the reason names the offending label so
-        // the LLM can self-correct.
-        var apollo = new Project("P-1", "Apollo");
+        // toValue returning null is the agreed signal for "label doesn't
+        // match any option". The orchestrator must reject rather than
+        // pass null to setValue (which would silently clear the field).
         var field = new SingleSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
         var controller = newController(field);
-        controller.fieldValueOptions(
-                ValueOptions.forField(field).options(List.of(apollo)));
+        controller.valueOptions(ValueOptions.forField(field)
+                .options((filter, limit) -> List.of("Apollo")), label -> null);
         controller.onRequest();
 
         var result = fillFormResult(controller, payload(field, "\"Unknown\""));
@@ -1436,22 +1387,22 @@ class FillFormToolTest {
 
     @Test
     void fillForm_multiSelect_writesResolvedSetViaValueOptions() {
-        // The converter resolves each LLM-supplied label against the
-        // registered items and aggregates the matches into the field's
-        // Set value type.
-        var apollo = new Project("APL", "Apollo");
-        var vega = new Project("VGA", "Vega");
+        // valueOptions on a MultiSelectField takes a single-item Function;
+        // the converter accumulates per-label items into the Set<Project>
+        // value type via an internal LinkedHashSet.
         var field = new MultiSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
         var controller = newController(field);
-        controller.fieldValueOptions(
-                ValueOptions.forField(field).options(List.of(apollo, vega)));
+        controller.valueOptions(
+                ValueOptions.forField(field)
+                        .options((filter, limit) -> List.of("Apollo", "Vega")),
+                label -> new Project(label, label));
         controller.onRequest();
 
         var result = fillFormResult(controller,
                 payload(field, "[\"Apollo\", \"Vega\"]"));
 
-        Assertions.assertEquals(Set.of(apollo, vega), field.getValue());
+        Assertions.assertEquals(Set.of(new Project("Apollo", "Apollo"),
+                new Project("Vega", "Vega")), field.getValue());
         Assertions.assertTrue(success(result));
     }
 
@@ -1464,8 +1415,8 @@ class FillFormToolTest {
 
         Assertions.assertEquals(Set.of(), field.getValue());
         Assertions.assertEquals(List.of(idOf(field)), rejectedIds(result));
-        Assertions.assertTrue(rejectionReason(result, idOf(field))
-                .contains("fieldValueOptions"));
+        Assertions.assertTrue(
+                rejectionReason(result, idOf(field)).contains("valueOptions"));
     }
 
     @Test
@@ -1475,7 +1426,7 @@ class FillFormToolTest {
         // `setItems(...)` has a non-empty ListDataProvider and the schema
         // surfaces the items as the `items.enum` of the array. The
         // converter must resolve each label against those items so the
-        // field is writable without also requiring fieldValueOptions(...).
+        // field is writable without also requiring valueOptions(...).
         var field = new MultiSelectField<String>();
         field.setItems("AI", "Cloud", "Security");
         var controller = controllerFor(field);
@@ -1536,15 +1487,14 @@ class FillFormToolTest {
     @Test
     void fillForm_multiSelect_emptyArrayClearsField() {
         // Empty array is the LLM clearing the multi-select; the converter
-        // short-circuits to the field's empty value without consulting the
-        // items list.
+        // builds an empty LinkedHashSet so the field's setValue receives
+        // an empty Set.
         var field = new MultiSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
         var existing = new Project("X", "X");
         field.setValue(Set.of(existing));
         var controller = newController(field);
-        controller.fieldValueOptions(ValueOptions.forField(field)
-                .options((filter, limit) -> List.of(existing)));
+        controller.valueOptions(ValueOptions.forField(field)
+                .options((filter, limit) -> List.of()), label -> existing);
         controller.onRequest();
 
         var result = fillFormResult(controller, payload(field, "[]"));
@@ -1558,14 +1508,14 @@ class FillFormToolTest {
         // The LLM sends a bare string for a multi-select field. The
         // converter enforces the array shape so a stray scalar payload
         // doesn't reach setValue.
-        var apollo = new Project("APL", "Apollo");
         var field = new MultiSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
         var existing = new Project("X", "X");
         field.setValue(Set.of(existing));
         var controller = newController(field);
-        controller.fieldValueOptions(ValueOptions.forField(field)
-                .options((filter, limit) -> List.of(apollo)));
+        controller.valueOptions(
+                ValueOptions.forField(field)
+                        .options((filter, limit) -> List.of("Apollo")),
+                label -> new Project(label, label));
         controller.onRequest();
 
         var result = fillFormResult(controller, payload(field, "\"Apollo\""));
@@ -1581,193 +1531,42 @@ class FillFormToolTest {
 
     @Test
     void fillForm_multiSelect_reregistrationOverwritesPriorOptions() {
-        // fieldValueOptions called twice on the same MultiSelect field — the
-        // second call wins, including switching from fixed to queryable.
-        var first = new Project("v1", "First");
-        var second = new Project("v2", "Second");
+        // valueOptions called twice on the same MultiSelect field — the
+        // second call wins, including switching from fixed to queryable
+        // and replacing the toValue function.
         var field = new MultiSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
         var controller = newController(field);
-        controller.fieldValueOptions(
-                ValueOptions.forField(field).options(List.of(first)));
-        controller.fieldValueOptions(ValueOptions.forField(field)
-                .options((filter, limit) -> List.of(second)));
+        controller.valueOptions(
+                ValueOptions.forField(field).options(List.of("First")),
+                label -> new Project("v1", label));
+        controller.valueOptions(
+                ValueOptions.forField(field)
+                        .options((filter, limit) -> List.of("Second")),
+                label -> new Project("v2", label));
         controller.onRequest();
-        executeQueryFieldOptions(controller, field, "", 10);
 
         var result = fillFormResult(controller, payload(field, "[\"Second\"]"));
 
         Assertions.assertTrue(success(result));
-        Assertions.assertEquals(Set.of(second), field.getValue(),
-                "Re-registration must resolve against the second "
-                        + "registration's items, not the first");
+        Assertions.assertEquals(Set.of(new Project("v2", "Second")),
+                field.getValue(),
+                "Re-registration must hand the LLM-supplied label to the "
+                        + "second toValue, not the first");
     }
 
     @Test
-    void fillForm_singleSelect_duplicateLabelsResolveToFirstItem() {
-        // When two items render to the same label, the converter resolves
-        // to the first item in registration order — pins the contract the
-        // duplicate-label warning advertises.
-        var first = new Project("P-1", "Apollo");
-        var dup = new Project("P-2", "Apollo");
-        var field = new SingleSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
-        var controller = newController(field);
-        controller.fieldValueOptions(
-                ValueOptions.forField(field).options(List.of(first, dup)));
-        controller.onRequest();
-
-        var result = fillFormResult(controller, payload(field, "\"Apollo\""));
-
-        Assertions.assertSame(first, field.getValue(),
-                "First item per label must win on resolution");
-        Assertions.assertTrue(success(result));
-    }
-
-    @Test
-    void fillForm_singleSelect_labelerChangeBetweenTurnsIsReflected() {
-        // The controller captures the field's labeler at each onRequest, so
-        // a swap between turns is reflected in both the labels the LLM is
-        // offered and the inverse lookup at fill time.
-        var apollo = new Project("APL", "Apollo");
-        var field = new SingleSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
-        var controller = newController(field);
-        controller.fieldValueOptions(
-                ValueOptions.forField(field).options(List.of(apollo)));
-        controller.onRequest();
-        fillFormResult(controller, payload(field, "\"Apollo\""));
-        Assertions.assertEquals(apollo, field.getValue(),
-                "Turn 1 must resolve via Project::name");
-
-        field.setValue(null);
-        field.setItemLabelGenerator(Project::code);
-        controller.onRequest();
-        var result = fillFormResult(controller, payload(field, "\"APL\""));
-
-        Assertions.assertEquals(apollo, field.getValue(),
-                "Turn 2 must resolve via the newly-installed Project::code");
-        Assertions.assertTrue(success(result));
-    }
-
-    @Test
-    void fillForm_singleSelect_queryModeFillBeforeQueryIsRejected() {
-        // A query-mode field that has not been queried yet has an empty
-        // cache. The fill must reject with a reason that names
-        // query_field_options so the LLM knows the missing step.
-        var apollo = new Project("APL", "Apollo");
-        var field = new SingleSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
-        var controller = newController(field);
-        controller.fieldValueOptions(ValueOptions.forField(field)
-                .options((filter, limit) -> List.of(apollo)));
-        controller.onRequest();
-
-        var result = fillFormResult(controller, payload(field, "\"Apollo\""));
-
-        Assertions.assertNull(field.getValue());
-        var reason = rejectionReason(result, idOf(field));
-        Assertions.assertTrue(reason.contains("query_field_options"),
-                "Empty-cache rejection must direct the LLM at "
-                        + "query_field_options; got: " + reason);
-    }
-
-    @Test
-    void fillForm_singleSelect_queryModeCachePersistsWithinTurn() {
-        // Within one turn the cache accumulates across query batches so
-        // the LLM can fill against a label seen in an earlier batch of the
-        // same turn.
-        var apollo = new Project("APL", "Apollo");
-        var vega = new Project("VGA", "Vega");
-        var catalog = List.of(apollo, vega);
-        var field = new SingleSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
-        var controller = newController(field);
-        controller.fieldValueOptions(ValueOptions.forField(field)
-                .options((filter, limit) -> catalog.stream()
-                        .filter(p -> p.name().toLowerCase()
-                                .contains(filter.toLowerCase()))
-                        .limit(limit).toList()));
-        controller.onRequest();
-        executeQueryFieldOptions(controller, field, "Apo", 10);
-        executeQueryFieldOptions(controller, field, "Veg", 10);
-
-        var result = fillFormResult(controller, payload(field, "\"Apollo\""));
-
-        Assertions.assertEquals(apollo, field.getValue(),
-                "Items from earlier queries in the same turn must remain "
-                        + "resolvable");
-        Assertions.assertTrue(success(result));
-    }
-
-    @Test
-    void fillForm_singleSelect_queryModeCacheResetsBetweenTurns() {
-        // The cache is bound to the turn: a fresh onRequest clears it so a
-        // second turn that skips query_field_options is rejected even if
-        // the first turn populated the cache for the same label.
-        var apollo = new Project("APL", "Apollo");
-        var field = new SingleSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
-        var controller = newController(field);
-        controller.fieldValueOptions(ValueOptions.forField(field)
-                .options((filter, limit) -> List.of(apollo)));
-        controller.onRequest();
-        executeQueryFieldOptions(controller, field, "", 10);
-        fillFormResult(controller, payload(field, "\"Apollo\""));
-        Assertions.assertEquals(apollo, field.getValue(),
-                "Turn 1 must fill after the query populates the cache");
-
-        field.setValue(null);
-        controller.onRequest();
-        var result = fillFormResult(controller, payload(field, "\"Apollo\""));
-
-        Assertions.assertNull(field.getValue(),
-                "Turn 2 must reject because the cache reset at onRequest");
-        var reason = rejectionReason(result, idOf(field));
-        Assertions.assertTrue(reason.contains("query_field_options"),
-                "Reason must direct the LLM at query_field_options; got: "
-                        + reason);
-    }
-
-    @Test
-    void fillForm_singleSelect_queryModeRepeatedOverlappingQueriesDoNotDuplicate() {
-        // Repeated queries returning overlapping items must not corrupt
-        // resolution. With first-per-label dedup in the cache, the LLM
-        // resolves to the original item regardless of how many times the
-        // application's BiFunction returned it.
-        var first = new Project("APL", "Apollo");
-        var second = new Project("APL-NEW", "Apollo");
-        var versions = new java.util.concurrent.atomic.AtomicReference<>(first);
-        var field = new SingleSelectField<Project>();
-        field.setItemLabelGenerator(Project::name);
-        var controller = newController(field);
-        controller.fieldValueOptions(ValueOptions.forField(field)
-                .options((filter, limit) -> List.of(versions.get())));
-        controller.onRequest();
-        executeQueryFieldOptions(controller, field, "", 10);
-        versions.set(second);
-        executeQueryFieldOptions(controller, field, "", 10);
-
-        var result = fillFormResult(controller, payload(field, "\"Apollo\""));
-
-        Assertions.assertSame(first, field.getValue(),
-                "Overlapping queries within a turn keep the first item "
-                        + "per label; the later instance must not replace it");
-        Assertions.assertTrue(success(result));
-    }
-
-    @Test
-    void fillForm_fieldValueOptionsOnPrimitiveTypeSkipsTypeDrivenParsing() {
-        // Registering fieldValueOptions(...) on a non-SELECT field still makes
+    void fillForm_valueOptionsOnPrimitiveTypeUsesToValueNotTypeDrivenParsing() {
+        // Registering valueOptions(...) on a non-SELECT field still makes
         // the LLM speak in labels (the schema advertises an enum/queryable
-        // string). The converter must resolve via the items list and skip
-        // type-driven parsing — otherwise the field would receive a raw
-        // String and the typed setValue would reject it.
+        // string). The converter must apply toValue and skip type-driven
+        // parsing — otherwise the field would receive a raw String and a
+        // typed setValue (e.g. ComboBox<Project>) would reject it.
         var field = new IntField();
         var controller = newController(field);
-        controller.fieldValueOptions(
-                ValueOptions.forField(field).options(List.of(1, 10))
-                        .itemLabelGenerator(v -> v == 1 ? "low" : "high"));
+        controller.valueOptions(
+                ValueOptions.forField(field)
+                        .options((filter, limit) -> List.of("low", "high")),
+                label -> "low".equals(label) ? 1 : 10);
         controller.onRequest();
 
         var result = fillFormResult(controller, payload(field, "\"high\""));
@@ -2028,7 +1827,7 @@ class FillFormToolTest {
     /**
      * Builds a controller around a form attached to {@code MockUIExtension}'s
      * UI but stops short of {@code onRequest()} so callers can register
-     * {@code fieldValueOptions} before the first turn. Attaching the form is
+     * {@code valueOptions} before the first turn. Attaching the form is
      * required: {@code executeFill} throws {@link IllegalStateException} on a
      * detached form, matching the production contract.
      */
