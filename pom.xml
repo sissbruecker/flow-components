@@ -74,7 +74,7 @@
     </scm>
     <properties>
         <flow.version>25.3-SNAPSHOT</flow.version>
-        <testbench.version>25.2.0</testbench.version>
+        <testbench.version>25.2.0-rc1</testbench.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -96,7 +96,7 @@
         <com.vaadin.tests.SharedBrowser.reuseBrowser>true</com.vaadin.tests.SharedBrowser.reuseBrowser>
         <com.vaadin.testbench.Parameters.testsInParallel>1</com.vaadin.testbench.Parameters.testsInParallel>
         <failIfNoTests>false</failIfNoTests>
-        <vaadin.pnpm.enable>true</vaadin.pnpm.enable>
+        <vaadin.pnpm.enable>false</vaadin.pnpm.enable>
         <osgi.bundle.license>http://www.apache.org/licenses/LICENSE-2.0</osgi.bundle.license>
         <osgi.export.package>default</osgi.export.package>
         <cvdlName/>
@@ -107,7 +107,7 @@
         <langchain4j.version>1.16.3</langchain4j.version>
         <spring-ai.version>2.0.0</spring-ai.version>
         <junit.version>4.13.2</junit.version>
-        <junit.jupiter.version>6.1.1</junit.jupiter.version>
+        <junit.jupiter.version>6.1.0</junit.jupiter.version>
 
         <!-- spreadsheet -->
         <poi.version>5.5.1</poi.version>

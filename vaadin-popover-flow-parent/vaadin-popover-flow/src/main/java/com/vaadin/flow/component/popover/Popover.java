@@ -24,7 +24,6 @@ import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.HasAriaLabel;
-import com.vaadin.flow.component.HasAriaRole;
 import com.vaadin.flow.component.HasComponents;
 import com.vaadin.flow.component.Synchronize;
 import com.vaadin.flow.component.Tag;
@@ -48,11 +47,11 @@ import tools.jackson.databind.node.ArrayNode;
  * @author Vaadin Ltd.
  */
 @Tag("vaadin-popover")
-@NpmPackage(value = "@vaadin/popover", version = "25.2.0")
+@NpmPackage(value = "@vaadin/popover", version = "25.2.0-rc2")
 @JsModule("@vaadin/popover/src/vaadin-popover.js")
 @JsModule("./vaadin-popover/popover.ts")
-public class Popover extends Component implements HasAriaLabel, HasAriaRole,
-        HasComponents, HasThemeVariant<PopoverVariant> {
+public class Popover extends Component implements HasAriaLabel, HasComponents,
+        HasThemeVariant<PopoverVariant> {
 
     private static Integer defaultHideDelay;
     private static Integer defaultFocusDelay;
@@ -77,7 +76,7 @@ public class Popover extends Component implements HasAriaLabel, HasAriaRole,
         getElement().setProperty("opened", false);
 
         updateTrigger();
-        setAriaRole("dialog");
+        setRole("dialog");
 
         getElement().addPropertyChangeListener("opened", event -> fireEvent(
                 new OpenedChangeEvent(this, event.isUserOriginated())));
@@ -385,13 +384,11 @@ public class Popover extends Component implements HasAriaLabel, HasAriaRole,
      *
      * @param role
      *            the role to set
-     * @deprecated Use {@link #setAriaRole(String)} instead
      */
-    @Deprecated(since = "25.3", forRemoval = true)
     public void setRole(String role) {
         Objects.requireNonNull(role, "Role cannot be null");
 
-        setAriaRole(role);
+        getElement().setProperty("role", role);
     }
 
     /**
@@ -399,13 +396,13 @@ public class Popover extends Component implements HasAriaLabel, HasAriaRole,
      *
      * @param role
      *            the role to set
-     * @deprecated Use {@link #setAriaRole(String)} instead
+     * @deprecated Use {@link #setRole(String)} instead
      */
     @Deprecated(since = "25.0", forRemoval = true)
     public void setOverlayRole(String role) {
         Objects.requireNonNull(role, "Role cannot be null");
 
-        setAriaRole(role);
+        setRole(role);
     }
 
     /**
@@ -413,11 +410,9 @@ public class Popover extends Component implements HasAriaLabel, HasAriaRole,
      * Defaults to {@code dialog}.
      *
      * @return the role
-     * @deprecated Use {@link #getAriaRole()} instead
      */
-    @Deprecated(since = "25.3", forRemoval = true)
     public String getRole() {
-        return getAriaRole().orElse(null);
+        return getElement().getProperty("role");
     }
 
     /**
@@ -425,11 +420,11 @@ public class Popover extends Component implements HasAriaLabel, HasAriaRole,
      * {@code dialog}.
      *
      * @return the role
-     * @deprecated Use {@link #getAriaRole()} instead
+     * @deprecated Use {@link #getRole()} instead
      */
     @Deprecated(since = "25.0", forRemoval = true)
     public String getOverlayRole() {
-        return getAriaRole().orElse(null);
+        return getRole();
     }
 
     /**
