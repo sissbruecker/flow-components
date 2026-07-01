@@ -355,6 +355,18 @@ public class FormAIController implements AIController {
      * chosen labels into a {@link LinkedHashSet} before
      * {@link HasValue#setValue}. Later calls for the same field overwrite
      * earlier ones.
+     * <p>
+     * Because the chosen label is written back verbatim, this overload is only
+     * correct when {@code label == item}. A config that would relabel items is
+     * rejected: an explicit
+     * {@link ValueOptions#itemLabelGenerator(ItemLabelGenerator)}, or a fixed
+     * option that the field's own {@code getItemLabelGenerator()} renders to a
+     * different label, throws. Route such a field through
+     * {@link #fieldValueOptions(ValueOptions, Function) the two-argument
+     * overload}, whose {@code toValue} maps the label back to the value. A
+     * query-based option source cannot be inspected up front, so only the
+     * explicit generator is checked there; the field's own label generator must
+     * render its items to themselves.
      *
      * @param config
      *            the field's options registration, not {@code null}; must have
@@ -365,15 +377,69 @@ public class FormAIController implements AIController {
      * @throws NullPointerException
      *             if {@code config} is {@code null}
      * @throws IllegalArgumentException
-     *             if the registration has no item source set; if the developer
-     *             routed a {@code MultiSelect} field through the single-value
+     *             if the registration has no item source set; if the config
+     *             resolves to a label generator that relabels items (explicit
+     *             {@code itemLabelGenerator} or a fixed option the field's own
+     *             generator relabels); if the developer routed a
+     *             {@code MultiSelect} field through the single-value
      *             {@code forField} overload (upcast reference); or if the
      *             field's value type is a Collection but the field does not
      *             implement {@link MultiSelect}
      */
     public FormAIController fieldValueOptions(ValueOptions<String> config) {
         Objects.requireNonNull(config, "Value options must not be null");
+        rejectRelabelingIdentityConfig(config);
         return applyValueOptions(config, Function.identity());
+    }
+
+    /**
+     * Guards the identity (single-argument) overload against a config whose
+     * LLM-facing label would differ from the value written. That overload
+     * writes the chosen label back as the value verbatim, so it is only correct
+     * when {@code label == item}. Two cases break that invariant and are
+     * rejected here:
+     * <ul>
+     * <li>An explicit
+     * {@link ValueOptions#itemLabelGenerator(ItemLabelGenerator)} — set on a
+     * String field it can only be there to relabel, which this overload cannot
+     * undo.</li>
+     * <li>A fixed option the field's own {@code getItemLabelGenerator()}
+     * renders to a different label. The field's default generator is usually
+     * {@link String#valueOf(Object)}, which leaves String items unchanged and
+     * so passes; a custom generator (for example {@code s -> "Label: " + s}) is
+     * caught.</li>
+     * </ul>
+     * A query-based option source has no items to inspect at registration time,
+     * so only the explicit generator is checked; the field's own generator must
+     * render items to themselves on that path.
+     */
+    private static void rejectRelabelingIdentityConfig(
+            ValueOptions<String> config) {
+        if (config.itemLabelGenerator() != null) {
+            throw new IllegalArgumentException(
+                    "fieldValueOptions(config) writes the chosen label back as "
+                            + "the field value, so it cannot be combined with "
+                            + "an itemLabelGenerator(...) that relabels items. "
+                            + "Use fieldValueOptions(config, toValue) to map "
+                            + "the label back to the value.");
+        }
+        var fixed = config.fixedOptions();
+        if (fixed == null) {
+            return;
+        }
+        var labeler = resolveItemLabeler(config.field(), null);
+        for (var item : fixed) {
+            var label = labeler.apply(item);
+            if (!Objects.equals(item, label)) {
+                throw new IllegalArgumentException(
+                        "fieldValueOptions(config) writes the chosen label "
+                                + "back as the field value, but the field's "
+                                + "item label generator renders option '" + item
+                                + "' to a different label '" + label
+                                + "'. Use fieldValueOptions(config, toValue) to "
+                                + "map the label back to the value.");
+            }
+        }
     }
 
     /**

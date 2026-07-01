@@ -575,6 +575,58 @@ class FormAIControllerTest {
         }
 
         @Test
+        void identityOverloadRejectsExplicitItemLabelGenerator() {
+            // The single-argument overload writes the chosen label back as the
+            // value, so an explicit itemLabelGenerator — which exists only to
+            // relabel — cannot be reconciled with label == value and is
+            // rejected in favour of the two-argument overload.
+            var field = new TestField();
+            var controller = new FormAIController(new Div(field));
+            var config = ValueOptions.forField(field).options(List.of("a", "b"))
+                    .itemLabelGenerator(s -> "Label: " + s);
+
+            Assertions.assertThrows(IllegalArgumentException.class,
+                    () -> controller.fieldValueOptions(config),
+                    "The single-argument overload must reject an explicit "
+                            + "item label generator");
+        }
+
+        @Test
+        void identityOverloadRejectsRelabelingFieldGenerator() {
+            // A String field whose own label generator relabels a fixed option
+            // breaks the label == value invariant of the single-argument
+            // overload, so registration is rejected.
+            var field = new SingleSelectField<String>();
+            field.setItemLabelGenerator(s -> "Label: " + s);
+            var controller = new FormAIController(new Div(field));
+            var config = ValueOptions.forField(field)
+                    .options(List.of("a", "b"));
+
+            Assertions.assertThrows(IllegalArgumentException.class,
+                    () -> controller.fieldValueOptions(config),
+                    "The single-argument overload must reject a field whose "
+                            + "own label generator relabels a fixed option");
+        }
+
+        @Test
+        void identityOverloadAcceptsIdentityPreservingFieldGenerator() {
+            // A field generator that renders String items to themselves (the
+            // common String::valueOf default of ComboBox and friends) keeps
+            // label == value, so the single-argument overload stays valid.
+            var field = new SingleSelectField<String>();
+            field.setItemLabelGenerator(String::valueOf);
+            var controller = new FormAIController(new Div(field));
+            controller.fieldValueOptions(
+                    ValueOptions.forField(field).options(List.of("a", "b")));
+            controller.onRequest();
+
+            Assertions.assertEquals("a\nb\n",
+                    executeQueryFieldOptions(controller, field, "", 10),
+                    "An identity-preserving field generator must not be "
+                            + "rejected by the single-argument overload");
+        }
+
+        @Test
         void reregisteringWithBiFunctionClearsPriorFixedOptionsFlag() {
             // Each fieldValueOptions call replaces the previous registration
             // for the same field. The fixed-options variant sets a flag that
