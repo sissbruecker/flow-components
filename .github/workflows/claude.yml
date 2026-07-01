@@ -123,3 +123,15 @@ jobs:
       - name: Summarize Claude session
         if: always() && steps.claude.outputs.execution_file != ''
         run: node "${{ runner.temp }}/summary.js" "${{ steps.claude.outputs.execution_file }}"
+
+      - name: Upload Claude execution log
+        # The execution_file is the full stream-json trace: every tool_use with
+        # its input and every tool_result. Off by default because on a public
+        # repo the artifact is world-readable; set the CLAUDE_DEBUG repository
+        # variable to 'true' to capture it when debugging a run's tool calls.
+        if: always() && vars.CLAUDE_DEBUG == 'true' && steps.claude.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-execution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          retention-days: 7
