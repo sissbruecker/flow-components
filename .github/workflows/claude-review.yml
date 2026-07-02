@@ -55,7 +55,9 @@ jobs:
           fetch-depth: 1
 
       - name: Stage action infra
-        run: cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
+        run: |
+          cp .github/claude/reference-repos.md "${{ runner.temp }}/reference-repos.md"
+          cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
 
       - name: Checkout PR branch
         # The review investigates related code in the PR head tree.
@@ -90,6 +92,13 @@ jobs:
           git fetch --depth=1 origin "$base_sha"
           git worktree add "$scope_dir/base" "$base_sha"
 
+      - name: Clone upstream references (read-only context)
+        run: |
+          git clone --depth 1 https://github.com/vaadin/flow.git \
+            "${{ runner.temp }}/reference/flow"
+          git clone --depth 1 https://github.com/vaadin/web-components.git \
+            "${{ runner.temp }}/reference/web-components"
+
       - name: Run Claude Code review
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -120,6 +129,11 @@ jobs:
             - The comments are the deliverable — do not output the review as response text.
           claude_args: |
             --add-dir ${{ runner.temp }}/pr-review
+            --add-dir ${{ runner.temp }}/reference/flow
+            --add-dir ${{ runner.temp }}/reference/web-components
+            --add-dir /tmp
+            --append-system-prompt-file ${{ runner.temp }}/reference-repos.md
+            --permission-mode acceptEdits
             --allowedTools "Skill,Task,Workflow,ReportFindings,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
 
       - name: Summarize Claude session
