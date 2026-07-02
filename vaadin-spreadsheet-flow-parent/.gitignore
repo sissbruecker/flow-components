@@ -23,7 +23,6 @@ node_modules
 .driver
 package*json
 pnpm*
-!**/pnpm-workspace.yaml
 .pnpm*
 error-screenshots
 
