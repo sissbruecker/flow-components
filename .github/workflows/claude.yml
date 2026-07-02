@@ -72,9 +72,7 @@ jobs:
         # modules locally at the branch's @NpmPackage versions. Without this, a
         # partial build (e.g. `-pl <impl> -am`) leaves siblings to be pulled from
         # the remote snapshot repo at newer npm pins.
-        # -DskipFrontend skips the per-IT frontend bundling here; wtr.js runs it
-        # when tests actually execute.
-        run: mvn install -B -T 1C -DskipTests -DskipFrontend
+        run: mvn install -B -T 1C -Dmaven.test.skip=true -Drelease
 
       - name: Install TestBench license
         if: env.TB_LICENSE != ''
