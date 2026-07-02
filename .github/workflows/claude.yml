@@ -47,8 +47,30 @@ jobs:
       actions: read # Required for Claude to read CI results on PRs
     steps:
       - name: Checkout repository
+        # No `ref:` — issue_comment/review events default to the repository's
+        # default branch. Kept as the first checkout so the trusted action infra
+        # staged below comes from the default branch, never the PR branch.
         uses: actions/checkout@v6
         with:
+          fetch-depth: 1
+
+      - name: Stage action infra
+        # Copy the action infra out of the repo *before* the PR branch is checked
+        # out, so the PR-branch checkout can't remove or modify these files
+        # (branches may predate them, and the system prompt must not come from an
+        # untrusted PR branch). Referenced by absolute path in later steps.
+        run: |
+          cp .github/claude/reference-repos.md "${{ runner.temp }}/reference-repos.md"
+          cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
+
+      - name: Checkout PR branch
+        # Replace the working tree with the PR head so the reactor build (and
+        # everything after) runs against the PR's code, matching the branch
+        # claude-code-action checks out for Claude.
+        if: github.event.issue.pull_request || github.event.pull_request
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ github.event.issue.number || github.event.pull_request.number }}/head
           fetch-depth: 1
 
       - name: Setup JDK 21
@@ -67,6 +89,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Build reactor
+        if: github.event.issue.pull_request || github.event.pull_request
         # Install every component's implementation jar into the local Maven repo
         # from the PR branch, so later frontend/IT builds resolve all sibling
         # modules locally at the branch's @NpmPackage versions. Without this, a
@@ -90,15 +113,6 @@ jobs:
             "${{ runner.temp }}/reference/flow"
           git clone --depth 1 https://github.com/vaadin/web-components.git \
             "${{ runner.temp }}/reference/web-components"
-
-      - name: Stage action infra
-        # The action checks out the PR head branch, which may not contain these
-        # files (e.g. branches predating them). Copy them from the default-branch
-        # checkout to a location outside the repo so the PR-branch checkout
-        # can't remove them, then reference them by absolute path below.
-        run: |
-          cp .github/claude/reference-repos.md "${{ runner.temp }}/reference-repos.md"
-          cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
