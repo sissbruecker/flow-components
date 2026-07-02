@@ -1,0 +1,136 @@
+name: Claude Code Review
+
+# Dedicated code-review lane. Triggered by a "@claude review" PR comment or
+# manually via workflow_dispatch. The phrase keeps the real "@claude" mention
+# so the installed Claude GitHub app still reacts to the comment; the generic
+# "@claude" workflow explicitly excludes it. Substring caveat: comments like
+# "@claude reviewed ..." or "@claude reviewing ..." also match and land here.
+#
+# Runs the claude-code-action in agent mode (explicit prompt, so no tracking
+# comment is posted). The prompt is a three-step harness: run the built-in
+# code-review skill against a pre-computed, deterministic review scope, triage
+# the findings for user impact, then post survivors as inline PR comments plus
+# one summary comment. All comments are posted as claude[bot] via the same app
+# token the generic workflow uses.
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Pull request number to review'
+        required: true
+        type: string
+
+# One review per PR at a time; a re-trigger queues instead of aborting a run
+# that may be mid-posting.
+concurrency:
+  group: claude-review-${{ github.event.issue.number || inputs.pr }}
+  cancel-in-progress: false
+
+env:
+  PR_NUMBER: ${{ github.event.issue.number || inputs.pr }}
+
+jobs:
+  review:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '@claude review') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        # Default branch first, so the trusted action infra staged below never
+        # comes from the PR branch.
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Stage action infra
+        run: cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
+
+      - name: Checkout PR branch
+        # The review investigates related code in the PR head tree.
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ env.PR_NUMBER }}/head
+          fetch-depth: 1
+
+      - name: Prepare review scope
+        # Pre-compute everything the review needs so the skill never has to
+        # derive it: the exact diff as GitHub renders it, the changed-file
+        # list, the PR metadata, and a browsable checkout of the merge-base
+        # (the pre-change state, resolved by the compare API regardless of
+        # local history or where the PR's base branch has moved since).
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scope_dir="${RUNNER_TEMP}/pr-review"
+          mkdir -p "$scope_dir"
+
+          gh pr diff "$PR_NUMBER" > "$scope_dir/pr.diff"
+          gh pr diff "$PR_NUMBER" --name-only > "$scope_dir/pr-files.txt"
+          gh pr view "$PR_NUMBER" \
+            --json title,body,author,labels,baseRefName,headRefName \
+            > "$scope_dir/pr-meta.json"
+
+          head_sha=$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)
+          base_ref_sha=$(gh pr view "$PR_NUMBER" --json baseRefOid --jq .baseRefOid)
+          base_sha=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${base_ref_sha}...${head_sha}" \
+            --jq .merge_base_commit.sha)
+
+          git fetch --depth=1 origin "$base_sha"
+          git worktree add "$scope_dir/base" "$base_sha"
+
+      - name: Run Claude Code review
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review pull request #${{ env.PR_NUMBER }} and deliver the result as PR comments.
+
+            ## Review inputs (prepared by earlier workflow steps)
+            - PR context (title, description, author, labels): ${{ runner.temp }}/pr-review/pr-meta.json — read this first; the description states the intent to review the changes against.
+            - Scope: the unified diff at ${{ runner.temp }}/pr-review/pr.diff is the complete review scope (changed files: ${{ runner.temp }}/pr-review/pr-files.txt). Do not compute your own diff.
+            - Head: the working tree is the PR head checkout; read related and surrounding code here.
+            - Base: the pre-change state is checked out at ${{ runner.temp }}/pr-review/base; consult it when a finding depends on prior behavior.
+
+            ## Step 1 — Review
+            Invoke the code-review skill (Skill tool, skill: code-review) with args set to `high` followed by the entire "Review inputs" section above, verbatim, as the review target. Do not pass --comment or --fix. Complete the skill's review before moving on.
+
+            ## Step 2 — Triage
+            Re-evaluate each finding for impact on applications that use these components:
+            - Keep findings a maintainer would act on: wrong runtime behavior, crashes, leaks, broken API contracts, regressions introduced by this PR.
+            - Drop findings on pre-existing code this PR does not change, style or naming preferences, and findings whose failure scenario you cannot confirm by reading the code. Investigate before dropping when unsure.
+            - Set aside for the summary (no inline comment): cleanup, simplification, and other minor suggestions.
+
+            ## Step 3 — Post
+            - For each kept finding, post one inline comment with mcp__github_inline_comment__create_inline_comment (confirmed: true), anchored to the finding's file and line. State what is wrong in one sentence, then the concrete failure scenario. Add a ```suggestion``` block only when it fully fixes the issue within the commented line range.
+            - Post exactly one summary comment with `gh pr comment ${{ env.PR_NUMBER }}`: a 2-3 sentence overview of what the PR does, then the inline findings as a `file:line — summary` list. Below that, add two collapsed `<details>` sections (omit either when empty): one titled "Minor suggestions" with the suggestions set aside in triage, and one titled "Dropped findings" with one line per dropped finding and the reason it was dropped. Leave a blank line after each `<summary>` tag so the markdown inside renders.
+            - If nothing survives triage, post only the summary comment saying the review found no significant issues.
+            - The comments are the deliverable — do not output the review as response text.
+          claude_args: |
+            --add-dir ${{ runner.temp }}/pr-review
+            --allowedTools "Skill,Task,Workflow,ReportFindings,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
+
+      - name: Summarize Claude session
+        if: always() && steps.claude.outputs.execution_file != ''
+        run: node "${{ runner.temp }}/summary.js" "${{ steps.claude.outputs.execution_file }}"
+
+      - name: Upload Claude execution log
+        # See claude.yml for why this is gated behind the CLAUDE_DEBUG variable.
+        if: always() && vars.CLAUDE_DEBUG == 'true' && steps.claude.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-review-execution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          retention-days: 7
