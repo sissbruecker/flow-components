@@ -72,6 +72,13 @@ window.Vaadin.Flow.gridConnector.initLazy = (grid) => {
           grid.$server.select(item.key);
         }
       }
+
+      // FYI: In single selection mode, the server can send items = [null]
+      // which means a "Deselect All" command.
+      const isSelectedItemDifferentOrNull = !grid.activeItem || !item || item.key !== grid.activeItem.key;
+      if (!userOriginated && selectionMode === 'SINGLE' && isSelectedItemDifferentOrNull) {
+        grid.activeItem = item;
+      }
     });
 
     if (selectedItemsChanged) {
@@ -109,33 +116,45 @@ window.Vaadin.Flow.gridConnector.initLazy = (grid) => {
     grid.selectedItems = updatedSelectedItems;
   };
 
-  function onItemActivate(event) {
-    const { item } = event.detail.model;
-    // The row model can hold a stale item while its data is being loaded, so
-    // skip activation unless the item is actually loaded in the data cache
-    if (!dataProviderController.getItemContext(item)) {
+  grid.__activeItemChanged = function (newVal, oldVal) {
+    if (selectionMode !== 'SINGLE') {
       return;
     }
-
-    if (selectionMode === 'SINGLE') {
-      if (!selectedKeys[item.key]) {
-        grid.$connector.doSelection([item], true);
-      } else if (!grid.__deselectDisallowed) {
-        grid.$connector.doDeselection([item], true);
+    if (!newVal) {
+      if (oldVal && selectedKeys[oldVal.key]) {
+        if (grid.__deselectDisallowed) {
+          grid.activeItem = oldVal;
+        } else {
+          // The item instance may have changed since the item was stored as active item
+          // and information such as whether the item may be selected or deselected may
+          // be stale. Use data provider controller to get updated instance from grid
+          // cache.
+          oldVal = dataProviderController.getItemContext(oldVal).item;
+          grid.$connector.doDeselection([oldVal], true);
+        }
       }
+    } else if (!selectedKeys[newVal.key]) {
+      grid.$connector.doSelection([newVal], true);
     }
+  };
+  grid._createPropertyObserver('activeItem', '__activeItemChanged');
 
-    if (!grid.__disallowDetailsOnClick) {
-      if (!item.detailsOpened) {
-        grid.$server.setDetailsVisible(item.key);
-      } else {
-        grid.$server.setDetailsVisible(null);
-      }
+  grid.__activeItemChangedDetails = function (newVal, oldVal) {
+    if (grid.__disallowDetailsOnClick) {
+      return;
     }
-  }
-
-  grid.addEventListener('cell-activate', onItemActivate);
-  grid.addEventListener('row-activate', onItemActivate);
+    // when grid is attached, newVal is not set and oldVal is undefined
+    // do nothing
+    if (newVal == null && oldVal === undefined) {
+      return;
+    }
+    if (newVal && !newVal.detailsOpened) {
+      grid.$server.setDetailsVisible(newVal.key);
+    } else {
+      grid.$server.setDetailsVisible(null);
+    }
+  };
+  grid._createPropertyObserver('activeItem', '__activeItemChangedDetails');
 
   grid.$connector.getRenderedRange = function () {
     const renderedRows = grid._getRenderedRows();

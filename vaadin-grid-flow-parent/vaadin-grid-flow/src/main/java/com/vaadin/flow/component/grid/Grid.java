@@ -213,8 +213,8 @@ import tools.jackson.databind.node.ObjectNode;
  *
  */
 @Tag("vaadin-grid")
-@NpmPackage(value = "@vaadin/grid", version = "25.3.0-alpha1")
-@NpmPackage(value = "@vaadin/tooltip", version = "25.3.0-alpha1")
+@NpmPackage(value = "@vaadin/grid", version = "25.2.0")
+@NpmPackage(value = "@vaadin/tooltip", version = "25.2.0")
 @JsModule("@vaadin/grid/src/vaadin-grid.js")
 @JsModule("@vaadin/grid/src/vaadin-grid-column.js")
 @JsModule("@vaadin/grid/src/vaadin-grid-sorter.js")
@@ -1267,17 +1267,14 @@ public class Grid<T> extends Component implements HasStyle, HasSize,
         }
 
         /**
-         * Remove the displayed details but keep the item in the list of
-         * details, so that the details stay open when the item is rendered
-         * again (for example after collapsing and expanding its parent row, or
-         * scrolling the item out of and back into view). Consistent with
-         * {@link #destroyAllData()}.
+         * Remove the displayed details and remove details item from the list
          *
          * @param item
          *            item to removed
          */
         @Override
         public void destroyData(T item) {
+            detailsVisible.remove(getItemId(item));
             if (itemDetailsDataGenerator != null) {
                 itemDetailsDataGenerator.destroyData(item);
             }
@@ -3131,7 +3128,7 @@ public class Grid<T> extends Component implements HasStyle, HasSize,
      */
     public void setItemSelectableProvider(SerializablePredicate<T> provider) {
         selectableProvider = provider;
-        refreshViewport();
+        getDataCommunicator().reset();
 
         if (selectionModel instanceof AbstractGridMultiSelectionModel<T> multiSelectionModel) {
             multiSelectionModel.updateSelectAllCheckBoxVisibility();
@@ -4097,13 +4094,11 @@ public class Grid<T> extends Component implements HasStyle, HasSize,
         super.onEnabledStateChanged(enabled);
 
         /*
-         * The visible rows need to be re-rendered so that renderers relying on
-         * the enabled state, such as NativeButtonRenderer, can update the
-         * "disabled" property they push to the client via DataGenerators.
-         * Components rendered inside cells are updated automatically since they
-         * are part of the component tree.
+         * The DataCommunicator needs to be reset so components rendered inside
+         * the cells can be updated to the new enabled state. The enabled state
+         * is passed as a property to the client via DataGenerators.
          */
-        refreshViewport();
+        getDataCommunicator().reset();
     }
 
     /**
