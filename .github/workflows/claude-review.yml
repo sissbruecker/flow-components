@@ -108,8 +108,16 @@ jobs:
           # the action's claude_args parser takes only a single value per
           # --add-dir flag and overwrites repeated flags, silently dropping all
           # but one directory (see base-action/src/parse-sdk-options.ts).
+          # CLAUDE_CODE_CHILD_SESSION forces synchronous subagent dispatch.
+          # Without it the runner launches subagents async and the headless
+          # session can end while they are still running, silently dropping
+          # the review (see anthropics/claude-code#69691). Undocumented; if a
+          # review ever hangs or loses its fan-out, remove this first.
           settings: |
             {
+              "env": {
+                "CLAUDE_CODE_CHILD_SESSION": "1"
+              },
               "permissions": {
                 "additionalDirectories": [
                   "${{ runner.temp }}/pr-review",
