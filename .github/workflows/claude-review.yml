@@ -106,18 +106,21 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             Review pull request #${{ env.PR_NUMBER }} and deliver the result as PR comments.
+            Follow the steps in order. Do not read the diff, the input files, or any source
+            files before Step 1 — the review skill gathers its own context, and it must
+            start from a clean slate.
 
             ## Review inputs (prepared by earlier workflow steps)
-            - PR context (title, description, author, labels): ${{ runner.temp }}/pr-review/pr-meta.json — read this first; the description states the intent to review the changes against.
+            - PR context (title, description, author, labels): ${{ runner.temp }}/pr-review/pr-meta.json — the description states the intent the changes should be reviewed against.
             - Scope: the unified diff at ${{ runner.temp }}/pr-review/pr.diff is the complete review scope (changed files: ${{ runner.temp }}/pr-review/pr-files.txt). Do not compute your own diff.
             - Head: the working tree is the PR head checkout; read related and surrounding code here.
             - Base: the pre-change state is checked out at ${{ runner.temp }}/pr-review/base; consult it when a finding depends on prior behavior.
 
             ## Step 1 — Review
-            Invoke the code-review skill (Skill tool, skill: code-review) with args set to `high` followed by the entire "Review inputs" section above, verbatim, as the review target. Do not pass --comment or --fix. Complete the skill's review before moving on.
+            As your first action, invoke the code-review skill (Skill tool, skill: code-review) with args set to `high` followed by the entire "Review inputs" section above, verbatim, as the review target. Do not pass --comment or --fix. Follow the skill's phases as written, including its finder fan-out. Complete the skill's review before moving on.
 
             ## Step 2 — Triage
-            Re-evaluate each finding for impact on applications that use these components:
+            Read ${{ runner.temp }}/pr-review/pr-meta.json now if the review has not already surfaced it — findings are judged against the PR's stated intent. Re-evaluate each finding for impact on applications that use these components:
             - Keep findings a maintainer would act on: wrong runtime behavior, crashes, leaks, broken API contracts, regressions introduced by this PR.
             - Drop findings on pre-existing code this PR does not change, style or naming preferences, and findings whose failure scenario you cannot confirm by reading the code. Investigate before dropping when unsure.
             - Set aside for the summary (no inline comment): cleanup, simplification, and other minor suggestions.
