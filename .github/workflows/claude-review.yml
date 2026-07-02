@@ -102,22 +102,25 @@ jobs:
       - name: Run Claude Code review
         id: claude
         uses: anthropics/claude-code-action@v1
+        # CLAUDE_CODE_DISABLE_BACKGROUND_TASKS forces synchronous subagent
+        # dispatch. Without it the Agent tool may launch subagents in the
+        # background (nondeterministic, feature-flag driven); the headless
+        # session then ends while they are still running and the review is
+        # silently lost — job green, no comments posted. The CLI (2.1.198)
+        # checks this variable directly in the dispatch decision, so with it
+        # set every subagent runs inline; batched Agent calls still run in
+        # parallel. A step-level env reaches the CLI because the base action
+        # spawns it with a copy of its own process env.
+        env:
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Extra working directories go through settings instead of --add-dir:
           # the action's claude_args parser takes only a single value per
           # --add-dir flag and overwrites repeated flags, silently dropping all
           # but one directory (see base-action/src/parse-sdk-options.ts).
-          # CLAUDE_CODE_CHILD_SESSION forces synchronous subagent dispatch.
-          # Without it the runner launches subagents async and the headless
-          # session can end while they are still running, silently dropping
-          # the review (see anthropics/claude-code#69691). Undocumented; if a
-          # review ever hangs or loses its fan-out, remove this first.
           settings: |
             {
-              "env": {
-                "CLAUDE_CODE_CHILD_SESSION": "1"
-              },
               "permissions": {
                 "additionalDirectories": [
                   "${{ runner.temp }}/pr-review",
@@ -156,7 +159,7 @@ jobs:
           claude_args: |
             --append-system-prompt-file ${{ runner.temp }}/reference-repos.md
             --permission-mode acceptEdits
-            --allowedTools "Skill,Task,Workflow,ReportFindings,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
+            --allowedTools "Skill,Task,ReportFindings,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
 
       - name: Summarize Claude session
         if: always() && steps.claude.outputs.execution_file != ''
