@@ -104,6 +104,21 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Extra working directories go through settings instead of --add-dir:
+          # the action's claude_args parser takes only a single value per
+          # --add-dir flag and overwrites repeated flags, silently dropping all
+          # but one directory (see base-action/src/parse-sdk-options.ts).
+          settings: |
+            {
+              "permissions": {
+                "additionalDirectories": [
+                  "${{ runner.temp }}/pr-review",
+                  "${{ runner.temp }}/reference/flow",
+                  "${{ runner.temp }}/reference/web-components",
+                  "/tmp"
+                ]
+              }
+            }
           prompt: |
             Review pull request #${{ env.PR_NUMBER }} and deliver the result as PR comments.
             Follow the steps in order. Do not read the diff, the input files, or any source
@@ -131,7 +146,6 @@ jobs:
             - If nothing survives triage, post only the summary comment saying the review found no significant issues.
             - The comments are the deliverable — do not output the review as response text.
           claude_args: |
-            --add-dir ${{ runner.temp }}/pr-review ${{ runner.temp }}/reference/flow ${{ runner.temp }}/reference/web-components /tmp
             --append-system-prompt-file ${{ runner.temp }}/reference-repos.md
             --permission-mode acceptEdits
             --allowedTools "Skill,Task,Workflow,ReportFindings,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"

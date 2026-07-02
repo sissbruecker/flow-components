@@ -135,8 +135,20 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           additional_permissions: |
             actions: read
+          # Extra working directories go through settings instead of --add-dir:
+          # the action's claude_args parser takes only a single value per
+          # --add-dir flag and overwrites repeated flags, silently dropping all
+          # but one directory (see base-action/src/parse-sdk-options.ts).
+          settings: |
+            {
+              "permissions": {
+                "additionalDirectories": [
+                  "${{ runner.temp }}/reference/flow",
+                  "${{ runner.temp }}/reference/web-components"
+                ]
+              }
+            }
           claude_args: |
-            --add-dir ${{ runner.temp }}/reference/flow ${{ runner.temp }}/reference/web-components
             --append-system-prompt-file ${{ runner.temp }}/reference-repos.md
             --mcp-config '{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@${{ env.PLAYWRIGHT_MCP_VERSION }}","--headless","--isolated"]}}}'
             --allowedTools "mcp__playwright,WebFetch,WebSearch,Bash(mvn:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(git add:*),Bash(git commit:*),Bash(git checkout:*),Bash(git restore:*),Bash(git stash:*),Bash(cd:*),Bash(npm install),Bash(npm ci),Bash(node scripts/wtr.js:*),Bash(node scripts/computeModules.js:*),Bash(scripts/checkstyle.sh:*),Bash(./scripts/checkstyle.sh:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
