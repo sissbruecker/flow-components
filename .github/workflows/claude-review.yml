@@ -128,10 +128,7 @@ jobs:
             - If nothing survives triage, post only the summary comment saying the review found no significant issues.
             - The comments are the deliverable — do not output the review as response text.
           claude_args: |
-            --add-dir ${{ runner.temp }}/pr-review
-            --add-dir ${{ runner.temp }}/reference/flow
-            --add-dir ${{ runner.temp }}/reference/web-components
-            --add-dir /tmp
+            --add-dir ${{ runner.temp }}/pr-review ${{ runner.temp }}/reference/flow ${{ runner.temp }}/reference/web-components /tmp
             --append-system-prompt-file ${{ runner.temp }}/reference-repos.md
             --permission-mode acceptEdits
             --allowedTools "Skill,Task,Workflow,ReportFindings,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"

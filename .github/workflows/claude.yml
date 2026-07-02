@@ -136,8 +136,7 @@ jobs:
           additional_permissions: |
             actions: read
           claude_args: |
-            --add-dir ${{ runner.temp }}/reference/flow
-            --add-dir ${{ runner.temp }}/reference/web-components
+            --add-dir ${{ runner.temp }}/reference/flow ${{ runner.temp }}/reference/web-components
             --append-system-prompt-file ${{ runner.temp }}/reference-repos.md
             --mcp-config '{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@${{ env.PLAYWRIGHT_MCP_VERSION }}","--headless","--isolated"]}}}'
             --allowedTools "mcp__playwright,WebFetch,WebSearch,Bash(mvn:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(git add:*),Bash(git commit:*),Bash(git checkout:*),Bash(git restore:*),Bash(git stash:*),Bash(cd:*),Bash(npm install),Bash(npm ci),Bash(node scripts/wtr.js:*),Bash(node scripts/computeModules.js:*),Bash(scripts/checkstyle.sh:*),Bash(./scripts/checkstyle.sh:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
