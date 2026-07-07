@@ -8,22 +8,6 @@ on:
   pull_request_review:
     types: [submitted]
 
-# Two lanes, chosen by the parity of the triggering comment/review id, so at
-# most two Claude runs happen at once; any further triggers queue behind them.
-# cancel-in-progress is false: a new comment must never abort a run already
-# answering an earlier one.
-concurrency:
-  group: >-
-    claude-${{
-      (endsWith(format('{0}', github.event.comment.id || github.event.review.id), '0')
-      || endsWith(format('{0}', github.event.comment.id || github.event.review.id), '2')
-      || endsWith(format('{0}', github.event.comment.id || github.event.review.id), '4')
-      || endsWith(format('{0}', github.event.comment.id || github.event.review.id), '6')
-      || endsWith(format('{0}', github.event.comment.id || github.event.review.id), '8'))
-      && 'lane-0' || 'lane-1'
-    }}
-  cancel-in-progress: false
-
 env:
   # Pin the Playwright MCP server so the browser and server versions stay in
   # lockstep. Bump this to upgrade; the browser cache key tracks it.
