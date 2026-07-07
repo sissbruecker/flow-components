@@ -54,6 +54,7 @@ jobs:
         run: |
           cp .github/claude/reference-repos.md "${{ runner.temp }}/reference-repos.md"
           cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
+          cp .github/claude/prompt.js "${{ runner.temp }}/prompt.js"
 
       - name: Checkout PR branch
         # Replace the working tree with the PR head so the reactor build (and
@@ -119,6 +120,10 @@ jobs:
           core_version=$(npm view "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" dependencies.playwright-core)
           npx --yes "playwright@${core_version}" install --with-deps chromium
 
+      - name: Build Claude prompt
+        id: prompt
+        run: node "${{ runner.temp }}/prompt.js"
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -128,23 +133,7 @@ jobs:
           # agent mode (no tracking comment); track_progress forces tag mode
           # back. It has no other effect (see src/modes/detector.ts).
           track_progress: true
-          # The action's tag-mode prompt only contains the trigger comment's
-          # body, with no link to the review thread it replies to — a reply
-          # like "@claude fix this" is ambiguous and Claude tends to fix ALL
-          # review comments. Inject the thread anchor (file, line, comment
-          # ids) from the webhook payload so the run is scoped to the one
-          # thread that triggered it. Empty (no-op) for other event types.
-          prompt: >-
-            ${{ github.event_name == 'pull_request_review_comment' &&
-            format('SCOPE: You were triggered by review comment id {0} in a single
-            review thread on file `{1}`{2}{3}. Find that thread in the review comments
-            above and address ONLY the issue discussed in it. All other review comments
-            and threads are background context — do not fix them unless the trigger
-            comment explicitly asks you to.',
-            github.event.comment.id,
-            github.event.comment.path,
-            github.event.comment.original_line && format(' (line {0})', github.event.comment.original_line) || '',
-            github.event.comment.in_reply_to_id && format(', in reply to comment id {0}', github.event.comment.in_reply_to_id) || '') || '' }}
+          prompt: ${{ steps.prompt.outputs.prompt }}
           additional_permissions: |
             actions: read
           # Extra working directories go through settings instead of --add-dir:
