@@ -9,8 +9,9 @@ on:
     types: [submitted]
 
 env:
-  # Pin the Playwright MCP server so the browser and server versions stay in
-  # lockstep. Bump this to upgrade; the browser cache key tracks it.
+  # Pin the Playwright MCP server version for reproducible runs. The MCP drives
+  # the runner's preinstalled Chrome (--browser chrome), so no browser download
+  # is needed. Bump this to upgrade the server.
   PLAYWRIGHT_MCP_VERSION: '0.0.77'
 
 jobs:
@@ -56,16 +57,6 @@ jobs:
           cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
           cp .github/claude/prompt.js "${{ runner.temp }}/prompt.js"
 
-      - name: Checkout PR branch
-        # Replace the working tree with the PR head so the reactor build (and
-        # everything after) runs against the PR's code, matching the branch
-        # claude-code-action checks out for Claude.
-        if: github.event.issue.pull_request || github.event.pull_request
-        uses: actions/checkout@v6
-        with:
-          ref: refs/pull/${{ github.event.issue.number || github.event.pull_request.number }}/head
-          fetch-depth: 1
-
       - name: Setup JDK 21
         uses: actions/setup-java@v5
         with:
@@ -95,17 +86,6 @@ jobs:
           git clone --depth 1 https://github.com/vaadin/web-components.git \
             "${{ runner.temp }}/reference/web-components"
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-mcp-${{ env.PLAYWRIGHT_MCP_VERSION }}
-
-      - name: Install Chromium for Playwright MCP
-        run: |
-          core_version=$(npm view "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" dependencies.playwright-core)
-          npx --yes "playwright@${core_version}" install --with-deps chromium
-
       - name: Build Claude prompt
         id: prompt
         run: node "${{ runner.temp }}/prompt.js"
@@ -132,7 +112,7 @@ jobs:
             }
           claude_args: |
             --append-system-prompt-file ${{ runner.temp }}/system-prompt.md
-            --mcp-config '{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@${{ env.PLAYWRIGHT_MCP_VERSION }}","--headless","--isolated"]}}}'
+            --mcp-config '{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@${{ env.PLAYWRIGHT_MCP_VERSION }}","--headless","--isolated","--browser","chrome"]}}}'
             --allowedTools "mcp__playwright,Bash(mvn:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(git add:*),Bash(git commit:*),Bash(git checkout:*),Bash(git restore:*),Bash(git stash:*),Bash(cd:*),Bash(npm install),Bash(npm ci),Bash(node scripts/wtr.js:*),Bash(node scripts/computeModules.js:*),Bash(scripts/checkstyle.sh:*),Bash(./scripts/checkstyle.sh:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
 
       - name: Summarize Claude session
