@@ -78,18 +78,6 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Install npm dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Build reactor
-        if: github.event.issue.pull_request || github.event.pull_request
-        # Install every component's implementation jar into the local Maven repo
-        # from the PR branch, so later frontend/IT builds resolve all sibling
-        # modules locally at the branch's @NpmPackage versions. Without this, a
-        # partial build (e.g. `-pl <impl> -am`) leaves siblings to be pulled from
-        # the remote snapshot repo at newer npm pins.
-        run: mvn install -B -T 1C -Dmaven.test.skip=true -Drelease
-
       - name: Install TestBench license
         if: env.TB_LICENSE != ''
         env:
@@ -114,8 +102,6 @@ jobs:
           key: playwright-${{ runner.os }}-mcp-${{ env.PLAYWRIGHT_MCP_VERSION }}
 
       - name: Install Chromium for Playwright MCP
-        # Install the exact browser build the pinned MCP's playwright-core
-        # expects, so the server never fails to find a matching browser.
         run: |
           core_version=$(npm view "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" dependencies.playwright-core)
           npx --yes "playwright@${core_version}" install --with-deps chromium
@@ -129,17 +115,12 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Setting a prompt on comment events would switch the action into
-          # agent mode (no tracking comment); track_progress forces tag mode
-          # back. It has no other effect (see src/modes/detector.ts).
+          # Setting a custom prompt would switch the action into agent mode
+          # track_progress forces tag mode back
           track_progress: true
           prompt: ${{ steps.prompt.outputs.prompt }}
           additional_permissions: |
             actions: read
-          # Extra working directories go through settings instead of --add-dir:
-          # the action's claude_args parser takes only a single value per
-          # --add-dir flag and overwrites repeated flags, silently dropping all
-          # but one directory (see base-action/src/parse-sdk-options.ts).
           settings: |
             {
               "permissions": {
@@ -152,8 +133,7 @@ jobs:
           claude_args: |
             --append-system-prompt-file ${{ runner.temp }}/system-prompt.md
             --mcp-config '{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@${{ env.PLAYWRIGHT_MCP_VERSION }}","--headless","--isolated"]}}}'
-            --allowedTools "mcp__playwright,WebFetch,WebSearch,Bash(mvn:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(git add:*),Bash(git commit:*),Bash(git checkout:*),Bash(git restore:*),Bash(git stash:*),Bash(cd:*),Bash(npm install),Bash(npm ci),Bash(node scripts/wtr.js:*),Bash(node scripts/computeModules.js:*),Bash(scripts/checkstyle.sh:*),Bash(./scripts/checkstyle.sh:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
-            --disallowedTools "Bash(mvn deploy:*)"
+            --allowedTools "mcp__playwright,Bash(mvn:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(git add:*),Bash(git commit:*),Bash(git checkout:*),Bash(git restore:*),Bash(git stash:*),Bash(cd:*),Bash(npm install),Bash(npm ci),Bash(node scripts/wtr.js:*),Bash(node scripts/computeModules.js:*),Bash(scripts/checkstyle.sh:*),Bash(./scripts/checkstyle.sh:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
 
       - name: Summarize Claude session
         if: always() && steps.claude.outputs.execution_file != ''
@@ -163,7 +143,7 @@ jobs:
         # The execution_file is the full stream-json trace: every tool_use with
         # its input and every tool_result. Off by default because on a public
         # repo the artifact is world-readable; set the CLAUDE_DEBUG repository
-        # variable to 'true' to capture it when debugging a run's tool calls.
+        # variable to 'true' to capture it when debugging a run.
         if: always() && vars.CLAUDE_DEBUG == 'true' && steps.claude.outputs.execution_file != ''
         uses: actions/upload-artifact@v4
         with:
