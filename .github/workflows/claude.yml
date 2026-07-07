@@ -41,11 +41,16 @@ jobs:
         contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association))
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
+      # Required by actions/checkout
+      contents: read
+      # Required by anthropics/claude-code-action to generate a short-lived
+      # app token (contents/pull_requests/issues: write) that is revoked at the
+      # end of the run. Thus, there should be no need to grant additional write
+      # permissions to the workflow itself.
       id-token: write
-      actions: read # Required for Claude to read CI results on PRs
+      # Required by github_ci MCP server, which uses the workflow token instead
+      # of the short-lived app token
+      actions: read
     steps:
       - name: Checkout repository
         # Pin to the default branch: pull_request_review_comment/review events
