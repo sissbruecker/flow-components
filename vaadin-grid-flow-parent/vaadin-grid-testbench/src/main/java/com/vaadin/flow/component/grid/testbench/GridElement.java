@@ -486,8 +486,8 @@ public class GridElement extends TestBenchElement {
             if (!checkbox.isChecked()) {
                 checkbox.getWrappedElement().click();
             }
-        } else if (!row.isSelected()) {
-            activateRow(row);
+        } else {
+            setActiveItem(row);
         }
     }
 
@@ -516,26 +516,19 @@ public class GridElement extends TestBenchElement {
             if (checkbox.isChecked()) {
                 checkbox.getWrappedElement().click();
             }
-        } else if (row.isSelected()) {
-            activateRow(row);
+        } else {
+            removeActiveItem(row);
         }
     }
 
-    /**
-     * Activates the row by dispatching a {@code row-activate} event, the same
-     * event the grid fires when a row is activated with the keyboard. This
-     * drives single-selection (and row details) through the connector without a
-     * real click, so it doesn't trigger item-click listeners as a side effect.
-     *
-     * @param row
-     *            the row to activate
-     */
-    private void activateRow(GridTRElement row) {
-        executeScript("""
-                arguments[0].dispatchEvent(new CustomEvent('row-activate', {
-                    detail: { model: { item: arguments[1]._item } }
-                }))
-                """, this, row);
+    private void setActiveItem(GridTRElement row) {
+        executeScript("arguments[0].activeItem=arguments[1]._item", this, row);
+    }
+
+    private void removeActiveItem(GridTRElement row) {
+        final String JS_DEACTIVATE_IF_ACTIVE = "if(arguments[0]._itemsEqual(arguments[0].activeItem, "
+                + "arguments[1]._item)) { arguments[0].activeItem=null;}";
+        executeScript(JS_DEACTIVATE_IF_ACTIVE, this, row);
     }
 
     /**
