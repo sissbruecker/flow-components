@@ -1,4 +1,6 @@
-# Upstream reference checkouts
+# Repository-specific instructions
+
+## Upstream reference checkouts
 
 When running in CI, read-only checkouts of two upstream Vaadin repositories are
 available as additional working directories, for extra context only:
@@ -11,7 +13,7 @@ available as additional working directories, for extra context only:
   client-side properties, events, and DOM behavior of the components that the
   Flow components here wrap.
 
-## How to use them
+### How to use them
 
 - Consult these checkouts only when the code and docs in this repository do not
   answer the question. They are a deliberate side-trip, not part of normal

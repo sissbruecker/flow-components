@@ -52,7 +52,7 @@ jobs:
         # (branches may predate them, and the system prompt must not come from an
         # untrusted PR branch). Referenced by absolute path in later steps.
         run: |
-          cp .github/claude/reference-repos.md "${{ runner.temp }}/reference-repos.md"
+          cp .github/claude/system-prompt.md "${{ runner.temp }}/system-prompt.md"
           cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
           cp .github/claude/prompt.js "${{ runner.temp }}/prompt.js"
 
@@ -150,7 +150,7 @@ jobs:
               }
             }
           claude_args: |
-            --append-system-prompt-file ${{ runner.temp }}/reference-repos.md
+            --append-system-prompt-file ${{ runner.temp }}/system-prompt.md
             --mcp-config '{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@${{ env.PLAYWRIGHT_MCP_VERSION }}","--headless","--isolated"]}}}'
             --allowedTools "mcp__playwright,WebFetch,WebSearch,Bash(mvn:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(git add:*),Bash(git commit:*),Bash(git checkout:*),Bash(git restore:*),Bash(git stash:*),Bash(cd:*),Bash(npm install),Bash(npm ci),Bash(node scripts/wtr.js:*),Bash(node scripts/computeModules.js:*),Bash(scripts/checkstyle.sh:*),Bash(./scripts/checkstyle.sh:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
             --disallowedTools "Bash(mvn deploy:*)"
