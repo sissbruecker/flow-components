@@ -80,7 +80,7 @@ async function runTests() {
       }
 
       // Install the IT module dependencies
-      execSync(`mvn flow:prepare-frontend flow:build-frontend`, {
+      execSync(`mvn -DskipTests flow:prepare-frontend flow:build-frontend`, {
         cwd: itFolder,
         stdio: 'inherit'
       });
@@ -95,7 +95,7 @@ async function runTests() {
       console.log(`Running tests in ${itFolder}`);
       try {
         const watchFlag = options.watch ? ' --watch' : '';
-        execSync(`npx web-test-runner --playwright ${wtrTestsFolderName}/**/*.test.ts${watchFlag}`, {
+        execSync(`npx web-test-runner --playwright ${wtrTestsFolderName}/**/*.test.ts --node-resolve${watchFlag}`, {
           cwd: itFolder,
           stdio: 'inherit'
         });
