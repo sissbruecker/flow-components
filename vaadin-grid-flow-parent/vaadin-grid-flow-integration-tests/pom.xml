@@ -216,7 +216,7 @@
     </build>
     <profiles>
         <profile>
-            <id>frontend</id>
+            <id>build-frontend</id>
             <activation>
                 <property>
                     <name>!skipFrontend</name>
@@ -229,14 +229,13 @@
                         <artifactId>flow-maven-plugin</artifactId>
                         <configuration>
                             <frontendDirectory>./frontend</frontendDirectory>
-                            <generateBundle>false</generateBundle>
                         </configuration>
                     </plugin>
                 </plugins>
             </build>
         </profile>
         <profile>
-            <id>jetty</id>
+            <id>run-jetty</id>
             <activation>
                 <property>
                     <name>!skipJetty</name>
