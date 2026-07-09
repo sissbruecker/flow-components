@@ -6,12 +6,14 @@ name: Claude Code Review
 # "@claude" workflow explicitly excludes it. Substring caveat: comments like
 # "@claude reviewed ..." or "@claude reviewing ..." also match and land here.
 #
-# Runs the claude-code-action in agent mode (explicit prompt, so no tracking
-# comment is posted). The prompt is a single /pr-review invocation: the
-# prepare-review.js step pre-computes a deterministic review scope and writes an
-# overview file, and the /pr-review command (.claude/commands/pr-review.md) does
-# the find/verify/triage/post harness against it. All comments are posted as
-# claude[bot] via the same app token the generic workflow uses.
+# Design: code-review-research/notes.md (on main). The review itself is an
+# ejected copy of the built-in /code-review medium prompt
+# (.github/claude/review-prompt.md) run by the claude-code-action; it only
+# reports findings via the ReportFindings tool. A prepare step pre-computes
+# every review input (diff, metadata, merge-base checkout), and a posting step
+# extracts the findings JSON from the execution file, routes them
+# deterministically, and posts everything as ONE review attributed to
+# claude[bot] via the action's app token.
 
 on:
   issue_comment:
@@ -44,25 +46,24 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      issues: write
       id-token: write
     steps:
       - name: Checkout repository
-        # Default branch first, so the trusted action infra staged below never
-        # comes from the PR branch.
+        # Default branch first, so the trusted infra staged below never comes
+        # from the PR branch. This matters twice here: PR branches must not be
+        # able to modify the review prompt or scripts, and the synthetic
+        # reproduction PRs used for testing have base branches that reconstruct
+        # old repo states without this infra at all.
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
       - name: Stage action infra
-        # Copy infra out of the repo *before* the PR branch is checked out, so
-        # the PR-branch checkout can't modify these files. The command itself
-        # (.claude/commands/pr-review.md) needs no staging: github-claude-action
-        # restores the whole .claude tree from the PR base before running.
         run: |
-          cp .github/claude/system-prompt.md "${{ runner.temp }}/system-prompt.md"
-          cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
+          cp .github/claude/review-prompt.md "${{ runner.temp }}/review-prompt.md"
           cp .github/claude/prepare-review.js "${{ runner.temp }}/prepare-review.js"
+          cp .github/claude/post-review.js "${{ runner.temp }}/post-review.js"
+          cp .github/claude/summary.js "${{ runner.temp }}/summary.js"
 
       - name: Checkout PR branch
         # The review investigates related code in the PR head tree.
@@ -72,11 +73,11 @@ jobs:
           fetch-depth: 1
 
       - name: Prepare review scope
-        # Pre-compute everything the review needs so the command never has to
-        # derive it: the exact diff as GitHub renders it, the changed-file list,
-        # the PR metadata, a browsable checkout of the merge-base, and an
-        # overview file that points at each input by absolute path. The overview
-        # path is the single argument passed to /pr-review.
+        # Pre-compute everything the review needs so the model never has to
+        # derive it: the exact diff as GitHub renders it, the changed-file
+        # list, the PR metadata (title/description = the intent the change is
+        # reviewed against), a browsable checkout of the merge-base, and an
+        # overview file that points at each input by absolute path.
         env:
           GH_TOKEN: ${{ github.token }}
         run: node "${{ runner.temp }}/prepare-review.js" "$PR_NUMBER"
@@ -88,6 +89,16 @@ jobs:
           git clone --depth 1 https://github.com/vaadin/web-components.git \
             "${{ runner.temp }}/reference/web-components"
 
+      - name: Build review prompt
+        id: build-prompt
+        run: |
+          {
+            echo 'prompt<<PROMPT_EOF'
+            sed "s|{{OVERVIEW_PATH}}|${{ runner.temp }}/pr-review/overview.md|" \
+              "${{ runner.temp }}/review-prompt.md"
+            echo 'PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code review
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -95,7 +106,7 @@ jobs:
         # dispatch. Without it the Agent tool may launch subagents in the
         # background (nondeterministic, feature-flag driven); the headless
         # session then ends while they are still running and the review is
-        # silently lost — job green, no comments posted. The CLI (2.1.198)
+        # silently lost — job green, no findings reported. The CLI (2.1.198)
         # checks this variable directly in the dispatch decision, so with it
         # set every subagent runs inline; batched Agent calls still run in
         # parallel. A step-level env reaches the CLI because the base action
@@ -119,16 +130,23 @@ jobs:
                 ]
               }
             }
-          # A single slash-command invocation. The command lives at
-          # .claude/commands/pr-review.md and is restored from the PR base by the
-          # action before running; the CLI expands it in headless mode. Its only
-          # argument is the overview file written by the prepare step, which
-          # points at every review input by absolute path.
-          prompt: /pr-review ${{ runner.temp }}/pr-review/overview.md
+          prompt: ${{ steps.build-prompt.outputs.prompt }}
           claude_args: |
-            --append-system-prompt-file ${{ runner.temp }}/system-prompt.md
-            --permission-mode acceptEdits
-            --allowedTools "Skill,Task,ReportFindings,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git branch:*),Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(wc:*),Bash(echo:*)"
+            --allowedTools "Agent,Task,ReportFindings,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(git status:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(wc:*)"
+
+      - name: Post review as claude[bot]
+        # Extracts the ReportFindings JSON from the execution file, routes each
+        # finding (inline thread / summary section) and posts ONE review via
+        # the GraphQL pending-review flow. Uses the action's app token so the
+        # review is attributed to claude[bot]. Always posts a review — an
+        # empty-findings run posts a body-only "nothing found" review, and a
+        # run whose execution file contains no ReportFindings call fails the
+        # job instead of posting, so a lost review is never mistaken for a
+        # clean one.
+        env:
+          GH_TOKEN: ${{ steps.claude.outputs.github_token }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: node "${{ runner.temp }}/post-review.js" "$PR_NUMBER"
 
       - name: Summarize Claude session
         if: always() && steps.claude.outputs.execution_file != ''

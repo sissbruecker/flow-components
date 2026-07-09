@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 /**
- * Prepare the review scope for the /pr-review slash command.
+ * Prepare the review scope for the CI code review.
  *
  * Runs in claude-review.yml as a plain workflow step (NOT by Claude), after the
  * PR head is checked out. It pre-computes everything the review needs so the
  * review agent never has to derive it, then writes a markdown overview file
- * that points at each input by absolute path. That overview path is the single
- * argument passed to /pr-review.
+ * that points at each input by absolute path.
  *
  * Reads from the environment (set by GitHub Actions):
  *   PR_NUMBER / argv[2]  pull request number to review
@@ -53,7 +52,6 @@ function requireEnv(name) {
 }
 
 function buildOverview({
-  prNumber,
   metaPath,
   diffPath,
   filesPath,
@@ -62,16 +60,16 @@ function buildOverview({
   flowPath,
   webComponentsPath,
 }) {
-  return `# PR review inputs
+  return `# Code review inputs
 
-This file is the single argument to \`/pr-review\`. It names the pull request
-under review and the absolute path to every prepared input. Read the paths
-below and use them; do not compute your own diff or fetch your own metadata.
+This file names the absolute path of every prepared input for the review.
+Read the paths below and use them; do not compute your own diff or fetch
+your own PR data.
 
-- **PR number**: \`${prNumber}\` — needed to post the review (\`gh pr comment ${prNumber}\`).
 - **PR metadata**: \`${metaPath}\` — title, description, author, labels. The
-  description states the intent the change is reviewed against.
-- **Diff**: \`${diffPath}\` — the complete review scope.
+  title and description state the intent the change is reviewed against.
+- **Diff**: \`${diffPath}\` — the complete review scope, exactly as GitHub
+  renders it.
 - **Changed files**: \`${filesPath}\`.
 - **Head**: \`${headPath}\` — the PR head checkout and the review's working tree;
   read related and surrounding code here.
@@ -82,8 +80,8 @@ below and use them; do not compute your own diff or fetch your own metadata.
 - **Reference — Vaadin web components** (read-only): \`${webComponentsPath}\` —
   client-side properties, events, and DOM behavior of the wrapped components.
 
-Pass a reference directory explicitly to any search; never mix it into a
-repo-wide search.
+The reference checkouts are side-trip context: consult them only when this
+repository's code does not answer the question.
 `;
 }
 
@@ -134,7 +132,7 @@ function main() {
 
   fs.writeFileSync(
     overviewPath,
-    buildOverview({ prNumber, metaPath, diffPath, filesPath, headPath, basePath, flowPath, webComponentsPath })
+    buildOverview({ metaPath, diffPath, filesPath, headPath, basePath, flowPath, webComponentsPath })
   );
 
   console.log(overviewPath);
