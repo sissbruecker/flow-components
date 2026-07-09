@@ -125,12 +125,8 @@ function route(findings) {
 }
 
 // --- Rendering ------------------------------------------------------------
-// Raw category and verdict appear on every finding, inline and in sections:
-// the tiering is an experiment and real runs need to show what landed where.
-
-function badge(finding) {
-  return `\`${finding.category}\` · ${finding.verdict.toLowerCase()}`;
-}
+// Verdict is routing-only and never rendered. Category shows only on section
+// list items, not on inline comments.
 
 function fileLabel(finding) {
   return finding.line ? `${finding.file}:${finding.line}` : finding.file;
@@ -138,16 +134,19 @@ function fileLabel(finding) {
 
 // Link to the blob at the head SHA so collapsed findings stay clickable.
 function fileLink(repo, headSha, finding) {
-  if (!finding.file) return '`unknown file`';
+  if (!finding.file) return null;
+  const base = finding.file.split('/').pop();
+  const label = finding.line ? `${base}:${finding.line}` : base;
   const anchor = finding.line ? `#L${finding.line}` : '';
-  return `[\`${fileLabel(finding)}\`](https://github.com/${repo}/blob/${headSha}/${encodeURI(finding.file)}${anchor})`;
+  return `[${label}](https://github.com/${repo}/blob/${headSha}/${encodeURI(finding.file)}${anchor})`;
 }
 
-// Continuation lines are indented so multi-line failure scenarios stay inside
-// the list item.
 function listItem(repo, headSha, finding) {
   const scenario = (finding.failure_scenario || '').trim().replace(/\n/g, '\n  ');
-  return `- **${fileLink(repo, headSha, finding)}** ${badge(finding)} — ${finding.summary}\n  ${scenario}`;
+  const tail = [scenario, fileLink(repo, headSha, finding), `*${finding.category}*`]
+    .filter(Boolean)
+    .join(' · ');
+  return `- **${finding.summary}**\n  ${tail}`;
 }
 
 function section(title, items) {
@@ -167,7 +166,7 @@ function threadBody(finding, { aroundLine } = {}) {
   if (aroundLine) {
     parts.push(`_Around line ${aroundLine} — could not attach to the exact diff line._`);
   }
-  parts.push(`**${finding.summary}**`, finding.failure_scenario || '', badge(finding));
+  parts.push(`**${finding.summary}**`, finding.failure_scenario || '');
   return parts.filter(Boolean).join('\n\n');
 }
 
