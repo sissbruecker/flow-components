@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Post the code-review findings to the PR as one review, attributed to the
- * token's identity (the Claude App token → claude[bot]).
+ * Post the code-review findings to the PR as one review.
  *
  * Runs in claude-review.yml as a plain workflow step (NOT by Claude), after
  * the claude-code-action step. Reads the action's execution file (a JSON array
@@ -31,7 +30,7 @@
  *   EXECUTION_FILE       JSON transcript of the review run
  *   GITHUB_REPOSITORY    owner/repo
  *   GH_TOKEN             token for the gh CLI; its identity is the review
- *                        author, so it must be the action's app token
+ *                        author
  *   DRY_RUN              if set, print the routing and rendered bodies and
  *                        exit without calling the GitHub API
  *

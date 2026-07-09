@@ -1,19 +1,10 @@
 name: Claude Code Review
 
-# Dedicated code-review lane. Triggered by a "@claude review" PR comment or
-# manually via workflow_dispatch. The phrase keeps the real "@claude" mention
-# so the installed Claude GitHub app still reacts to the comment; the generic
-# "@claude" workflow explicitly excludes it. Substring caveat: comments like
-# "@claude reviewed ..." or "@claude reviewing ..." also match and land here.
-#
-# Design: code-review-research/notes.md (on main). The review itself is an
-# ejected copy of the built-in /code-review medium prompt
-# (.github/claude/review-prompt.md) run by the claude-code-action; it only
-# reports findings via the ReportFindings tool. A prepare step pre-computes
-# every review input (diff, metadata, merge-base checkout), and a posting step
-# extracts the findings JSON from the execution file, routes them
-# deterministically, and posts everything as ONE review attributed to
-# claude[bot] via the action's app token.
+# Reviews a pull request, triggered by a "@claude review" PR comment or
+# manually via workflow_dispatch. A prepare step pre-computes the review input
+# (diff, metadata, merge-base checkout), the claude-code-action runs the review
+# and reports findings via the ReportFindings tool, and a posting step routes
+# those findings and posts them as one review.
 
 on:
   issue_comment:
@@ -73,11 +64,6 @@ jobs:
           fetch-depth: 1
 
       - name: Prepare review scope
-        # Pre-compute everything the review needs so the model never has to
-        # derive it: the exact diff as GitHub renders it, the changed-file
-        # list, the PR metadata (title/description = the intent the change is
-        # reviewed against), a browsable checkout of the merge-base, and an
-        # overview file that points at each input by absolute path.
         env:
           GH_TOKEN: ${{ github.token }}
         run: node "${{ runner.temp }}/prepare-review.js" "$PR_NUMBER"
@@ -134,17 +120,9 @@ jobs:
           claude_args: |
             --allowedTools "Agent,Task,ReportFindings,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(git status:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(rg:*),Bash(head:*),Bash(tail:*),Bash(wc:*)"
 
-      - name: Post review as claude[bot]
-        # Extracts the ReportFindings JSON from the execution file, routes each
-        # finding (inline thread / summary section) and posts ONE review via
-        # the GraphQL pending-review flow. Uses the action's app token so the
-        # review is attributed to claude[bot]. Always posts a review — an
-        # empty-findings run posts a body-only "nothing found" review, and a
-        # run whose execution file contains no ReportFindings call fails the
-        # job instead of posting, so a lost review is never mistaken for a
-        # clean one.
+      - name: Post review
         env:
-          GH_TOKEN: ${{ steps.claude.outputs.github_token }}
+          GH_TOKEN: ${{ github.token }}
           EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
         run: node "${{ runner.temp }}/post-review.js" "$PR_NUMBER"
 
@@ -153,7 +131,6 @@ jobs:
         run: node "${{ runner.temp }}/summary.js" "${{ steps.claude.outputs.execution_file }}"
 
       - name: Upload Claude execution log
-        # See claude.yml for why this is gated behind the CLAUDE_DEBUG variable.
         if: always() && vars.CLAUDE_DEBUG == 'true' && steps.claude.outputs.execution_file != ''
         uses: actions/upload-artifact@v4
         with:
