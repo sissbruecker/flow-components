@@ -280,32 +280,36 @@ const SUBMIT_REVIEW = `mutation($reviewId: ID!, $body: String!) {
 
 // Try-then-demote: line-level → file-level → summary list. Anchoring rules
 // (line must be in the PR diff; renamed/deleted/binary files) are GitHub's to
-// judge — any error demotes, nothing breaks the review.
+// judge — any failure demotes, nothing breaks the review. A failure is either
+// a GraphQL error OR a 200 with thread: null — GitHub reports a line outside
+// the diff the latter way, without an error.
+function tryAddThread(mutation, variables) {
+  try {
+    return Boolean(graphql(mutation, variables).addPullRequestReviewThread?.thread?.id);
+  } catch {
+    return false;
+  }
+}
+
 function postThread(reviewId, finding) {
   if (finding.file && finding.line) {
-    try {
-      graphql(ADD_LINE_THREAD, {
-        reviewId,
-        path: finding.file,
-        line: finding.line,
-        body: threadBody(finding),
-      });
-      return true;
-    } catch {
-      console.warn(`Line thread failed for ${fileLabel(finding)}, retrying file-level`);
-    }
+    const created = tryAddThread(ADD_LINE_THREAD, {
+      reviewId,
+      path: finding.file,
+      line: finding.line,
+      body: threadBody(finding),
+    });
+    if (created) return true;
+    console.warn(`Line thread failed for ${fileLabel(finding)}, retrying file-level`);
   }
   if (finding.file) {
-    try {
-      graphql(ADD_FILE_THREAD, {
-        reviewId,
-        path: finding.file,
-        body: threadBody(finding, { aroundLine: finding.line }),
-      });
-      return true;
-    } catch {
-      console.warn(`File thread failed for ${finding.file}, demoting to summary`);
-    }
+    const created = tryAddThread(ADD_FILE_THREAD, {
+      reviewId,
+      path: finding.file,
+      body: threadBody(finding, { aroundLine: finding.line }),
+    });
+    if (created) return true;
+    console.warn(`File thread failed for ${finding.file}, demoting to summary`);
   }
   return false;
 }
