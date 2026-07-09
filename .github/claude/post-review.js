@@ -4,8 +4,8 @@
  * token's identity (the Claude App token → claude[bot]).
  *
  * Runs in claude-review.yml as a plain workflow step (NOT by Claude), after
- * the claude-code-action step. Reads the action's execution file (stream-json)
- * and takes the input of the LAST ReportFindings tool call — never the result
+ * the claude-code-action step. Reads the action's execution file (a JSON array
+ * of events) and takes the input of the LAST ReportFindings tool call — never the result
  * event text. No ReportFindings call at all means the review was lost
  * (background-subagent failure mode): the script exits non-zero instead of
  * posting, so a lost review is never mistaken for a clean one. An empty
@@ -28,7 +28,7 @@
  *
  * Reads from the environment (set by GitHub Actions):
  *   PR_NUMBER / argv[2]  pull request number reviewed
- *   EXECUTION_FILE       stream-json transcript of the review run
+ *   EXECUTION_FILE       JSON transcript of the review run
  *   GITHUB_REPOSITORY    owner/repo
  *   GH_TOKEN             token for the gh CLI; its identity is the review
  *                        author, so it must be the action's app token
@@ -76,18 +76,21 @@ function graphql(query, variables = {}) {
   return JSON.parse(capture('gh', args)).data;
 }
 
+// The action writes the execution file as a single JSON array of events.
+function readEvents(executionFile) {
+  const events = JSON.parse(fs.readFileSync(executionFile, 'utf8'));
+  if (!Array.isArray(events)) {
+    throw new Error('Execution file is not a JSON array of events');
+  }
+  return events;
+}
+
 // The input of the LAST ReportFindings tool_use in the transcript. Keyed on
 // the tool call, never on result events: --fix re-reporting and stray extra
 // result events both produce earlier/other candidates.
 function extractReport(executionFile) {
   let report = null;
-  for (const line of fs.readFileSync(executionFile, 'utf8').split('\n')) {
-    let event;
-    try {
-      event = JSON.parse(line);
-    } catch {
-      continue;
-    }
+  for (const event of readEvents(executionFile)) {
     if (event.type !== 'assistant') continue;
     for (const block of event.message?.content ?? []) {
       if (block.type === 'tool_use' && block.name === 'ReportFindings') {
