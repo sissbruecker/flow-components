@@ -2,7 +2,7 @@
 /**
  * Post the code-review findings to the PR as one review.
  *
- * Runs in claude-review.yml as a plain workflow step (NOT by Claude), after
+ * Runs in code-review.yml as a plain workflow step (NOT by Claude), after
  * the claude-code-action step. Reads the action's execution file (a JSON array
  * of events) and takes the input of the LAST ReportFindings tool call — never the result
  * event text. No ReportFindings call at all means the review was lost

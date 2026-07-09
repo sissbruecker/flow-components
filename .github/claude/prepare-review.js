@@ -2,7 +2,7 @@
 /**
  * Prepare the review scope for the CI code review.
  *
- * Runs in claude-review.yml as a plain workflow step (NOT by Claude), after the
+ * Runs in code-review.yml as a plain workflow step (NOT by Claude), after the
  * PR head is checked out. It pre-computes everything the review needs so the
  * review agent never has to derive it, then writes a markdown overview file
  * that points at each input by absolute path.
