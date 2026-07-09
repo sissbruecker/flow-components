@@ -30,7 +30,6 @@ node_modules
 !/package.json
 !/package-lock.json
 pnpm*
-!**/pnpm-workspace.yaml
 .npmrc
 .pnpmfile.cjs
 error-screenshots
@@ -39,6 +38,7 @@ error-screenshots
 **/frontend/index.html
 **/frontend/*.tsx
 dev-bundle
+prod.bundle
 .vaadin-node-tasks.lock
 
 # Claude Code

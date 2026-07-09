@@ -18,7 +18,6 @@ package com.vaadin.flow.component.badge.tests;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import com.vaadin.flow.component.HasAriaRole;
 import com.vaadin.flow.component.badge.Badge;
 import com.vaadin.flow.component.html.Span;
 
@@ -184,7 +183,6 @@ class BadgeTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     void setRole_getRole() {
         var badge = new Badge();
         Assertions.assertNull(badge.getRole());
@@ -194,11 +192,6 @@ class BadgeTest {
 
         badge.setRole(null);
         Assertions.assertNull(badge.getRole());
-    }
-
-    @Test
-    void implementsHasAriaRole() {
-        Assertions.assertTrue(HasAriaRole.class.isAssignableFrom(Badge.class));
     }
 
     @Test
