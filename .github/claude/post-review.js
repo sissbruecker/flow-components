@@ -141,12 +141,12 @@ function fileLink(repo, headSha, finding) {
   return `[${label}](https://github.com/${repo}/blob/${headSha}/${encodeURI(finding.file)}${anchor})`;
 }
 
-function listItem(repo, headSha, finding) {
-  const scenario = (finding.failure_scenario || '').trim().replace(/\n/g, '\n  ');
-  const tail = [scenario, fileLink(repo, headSha, finding), `*${finding.category}*`]
+function findingBlock(repo, headSha, finding) {
+  const scenario = (finding.failure_scenario || '').trim();
+  const meta = [fileLink(repo, headSha, finding), `\`${finding.category}\``]
     .filter(Boolean)
     .join(' · ');
-  return `- **${finding.summary}**\n  ${tail}`;
+  return [`**${finding.summary}**`, scenario, `<sub>${meta}</sub>`].filter(Boolean).join('\n');
 }
 
 function section(title, items) {
@@ -155,7 +155,7 @@ function section(title, items) {
     '<details>',
     `<summary>${title} (${items.length})</summary>`,
     '',
-    items.join('\n'),
+    items.join('\n\n'),
     '',
     '</details>',
   ].join('\n');
@@ -170,26 +170,58 @@ function threadBody(finding, { aroundLine } = {}) {
   return parts.filter(Boolean).join('\n\n');
 }
 
-// Summary body: unanchored confirmed issues stay visible (not collapsed);
-// PLAUSIBLE issues and cleanup fold into counted sections; empty sections are
-// omitted. Zero-findings runs still post, so "reviewed, nothing found" is
+function pluralize(count, noun) {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+function joinNaturally(parts) {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+// One-line overview that opens every summary body; doubles as the whole body
+// when there is nothing else to show, so "reviewed, nothing found" stays
 // distinguishable from "review never happened".
-function summaryBody(repo, headSha, { unanchored, possible, suggestions }, inlineCount) {
-  const parts = [];
+function overviewLine({ unanchored, possible, suggestions }, inlineCount) {
+  const below = [
+    unanchored.length ? pluralize(unanchored.length, 'issue') : null,
+    possible.length ? pluralize(possible.length, 'possible issue') : null,
+    suggestions.length ? pluralize(suggestions.length, 'suggestion') : null,
+  ].filter(Boolean);
+  const clauses = [];
+  if (inlineCount) {
+    clauses.push(
+      inlineCount === 1
+        ? 'left **1 comment** on an issue'
+        : `left **${inlineCount} comments** on issues`
+    );
+  }
+  if (below.length) {
+    clauses.push(`collected ${joinNaturally(below)} below`);
+  }
+  if (!clauses.length) {
+    return '✅ Nothing to flag — the changes look good.';
+  }
+  return `Reviewed the changes — ${joinNaturally(clauses)}.`;
+}
+
+// Summary body: overview line, then unanchored confirmed issues (visible, not
+// collapsed), then PLAUSIBLE issues and cleanup folded into counted sections;
+// empty sections are omitted. Zero-findings runs still post.
+function summaryBody(repo, headSha, sections, inlineCount) {
+  const { unanchored, possible, suggestions } = sections;
+  const parts = [overviewLine(sections, inlineCount)];
   if (unanchored.length) {
     parts.push(
       '**Confirmed issues that could not be attached to the diff:**\n\n' +
-        unanchored.map((f) => listItem(repo, headSha, f)).join('\n')
+        unanchored.map((f) => findingBlock(repo, headSha, f)).join('\n\n')
     );
   }
   if (possible.length) {
-    parts.push(section('Possible issues', possible.map((f) => listItem(repo, headSha, f))));
+    parts.push(section('⚠️ Possible issues', possible.map((f) => findingBlock(repo, headSha, f))));
   }
   if (suggestions.length) {
-    parts.push(section('Suggestions', suggestions.map((f) => listItem(repo, headSha, f))));
-  }
-  if (!parts.length) {
-    parts.push(inlineCount > 0 ? `${inlineCount} finding(s) posted as review comments.` : 'No findings.');
+    parts.push(section('💡 Suggestions', suggestions.map((f) => findingBlock(repo, headSha, f))));
   }
   return parts.join('\n\n');
 }
