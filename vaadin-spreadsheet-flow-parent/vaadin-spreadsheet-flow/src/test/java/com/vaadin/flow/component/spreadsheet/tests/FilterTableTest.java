@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.checkbox.CheckboxGroup;
 import com.vaadin.flow.component.spreadsheet.ItemFilter;
 import com.vaadin.flow.component.spreadsheet.PopupButton;
@@ -65,78 +64,78 @@ class FilterTableTest {
 
     @Test
     void init_filteredRows_empty() {
-        Assertions.assertEquals(0, getItemFilter(1).getFilteredRows().size());
+        Assertions.assertEquals(0, getItemFilter().getFilteredRows().size());
     }
 
     @Test
     void filter_filteredRows_hasFilteredRow() {
         // Filter out row 4
-        getFilterCheckboxGroup(1).deselect("4");
+        getFilterCheckboxGroup().deselect("4");
 
-        Assertions.assertEquals(1, getItemFilter(1).getFilteredRows().size());
-        Assertions.assertEquals(3, getItemFilter(1).getFilteredRows().iterator()
-                .next().intValue());
+        Assertions.assertEquals(1, getItemFilter().getFilteredRows().size());
+        Assertions.assertEquals(3,
+                getItemFilter().getFilteredRows().iterator().next().intValue());
     }
 
     @Test
     void filter_filteredRows_rowHidden() {
-        getFilterCheckboxGroup(1).deselect("4");
+        getFilterCheckboxGroup().deselect("4");
 
         Assertions.assertTrue(spreadsheet.isRowHidden(3));
     }
 
     @Test
     void init_clearButtonDisabled() {
-        Assertions.assertFalse(getClearButton(1).isEnabled());
+        Assertions.assertFalse(getClearButton().isEnabled());
     }
 
     @Test
     void filter_filteredAllRows_clearButtonEnabled() {
-        getFilterCheckboxGroup(1).deselectAll();
+        getFilterCheckboxGroup().deselectAll();
 
-        Assertions.assertTrue(getClearButton(1).isEnabled());
+        Assertions.assertTrue(getClearButton().isEnabled());
     }
 
     @Test
     void init_popupButtonInactive() {
-        Assertions.assertFalse(getPopupButton(1).isActive());
+        Assertions.assertFalse(getPopupButton().isActive());
     }
 
     @Test
     void filter_popupButtonActive() {
-        getFilterCheckboxGroup(1).deselect("4");
+        getFilterCheckboxGroup().deselect("4");
 
-        Assertions.assertTrue(getPopupButton(1).isActive());
+        Assertions.assertTrue(getPopupButton().isActive());
     }
 
     @Test
     void filter_clearAllButtonClick_filtersCleared() {
-        getFilterCheckboxGroup(1).deselect("4");
-        getClearButton(1).click();
+        getFilterCheckboxGroup().deselect("4");
+        getClearButton().click();
 
-        Assertions.assertEquals(0, getItemFilter(1).getFilteredRows().size());
+        Assertions.assertEquals(0, getItemFilter().getFilteredRows().size());
         Assertions.assertFalse(spreadsheet.isRowHidden(3));
-        Assertions.assertFalse(getClearButton(1).isEnabled());
-        Assertions.assertFalse(getPopupButton(1).isActive());
+        Assertions.assertFalse(getClearButton().isEnabled());
+        Assertions.assertFalse(getPopupButton().isActive());
     }
 
     @Test
     void filter_clearAndReload_filtersCleared() {
-        getFilterCheckboxGroup(1).deselect("4");
+        getFilterCheckboxGroup().deselect("4");
         table.clear();
         table.reload();
         table.onFiltersUpdated();
 
-        Assertions.assertEquals(0, getItemFilter(1).getFilteredRows().size());
+        Assertions.assertEquals(0, getItemFilter().getFilteredRows().size());
         Assertions.assertFalse(spreadsheet.isRowHidden(3));
-        Assertions.assertFalse(getClearButton(1).isEnabled());
-        Assertions.assertFalse(getPopupButton(1).isActive());
+        Assertions.assertFalse(getClearButton().isEnabled());
+        Assertions.assertFalse(getPopupButton().isActive());
     }
 
     @Test
     void filter_unregisterFilter_filtersCleared() {
-        getFilterCheckboxGroup(1).deselect("4");
-        table.unRegisterFilter(getPopupButton(1), getItemFilter(1));
+        getFilterCheckboxGroup().deselect("4");
+        table.unRegisterFilter(getPopupButton(), getItemFilter());
         table.onFiltersUpdated();
 
         Assertions.assertFalse(spreadsheet.isRowHidden(3));
@@ -144,115 +143,40 @@ class FilterTableTest {
 
     @Test
     void registerFilter_uknownPopupButton_throws() {
-        Assertions.assertThrows(IllegalArgumentException.class, () -> table
-                .registerFilter(new PopupButton(), getItemFilter(1)));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> table.registerFilter(new PopupButton(), getItemFilter()));
     }
 
     @Test
     void filteredTable_unhideRowAndOpenPopup_rowIsUnhidden() {
-        getFilterCheckboxGroup(1).deselect("4");
+        getFilterCheckboxGroup().deselect("4");
 
         spreadsheet.setRowHidden(3, false);
-        getPopupButton(1).openPopup();
+        getPopupButton().openPopup();
 
         Assertions.assertFalse(spreadsheet.isRowHidden(3));
     }
 
-    @Test
-    void deselectAll_allRowsHidden() {
-        getSelectAllCheckbox(1).setValue(false);
-
-        Assertions.assertEquals(4, getItemFilter(1).getFilteredRows().size());
-        Assertions.assertTrue(spreadsheet.isRowHidden(2));
-        Assertions.assertTrue(spreadsheet.isRowHidden(3));
-        Assertions.assertTrue(spreadsheet.isRowHidden(4));
-        Assertions.assertTrue(spreadsheet.isRowHidden(5));
-    }
-
-    @Test
-    void deselectAll_reopenPopup_staysDeselectedAndHidden() {
-        getSelectAllCheckbox(1).setValue(false);
-
-        getPopupButton(1).openPopup();
-
-        Assertions.assertFalse(getSelectAllCheckbox(1).getValue());
-        Assertions.assertTrue(getFilterCheckboxGroup(1).getValue().isEmpty());
-        Assertions.assertEquals(4, getItemFilter(1).getFilteredRows().size());
-        Assertions.assertTrue(spreadsheet.isRowHidden(2));
-    }
-
-    @Test
-    void deselectAll_reopenPopup_selectAllNotIndeterminate() {
-        getSelectAllCheckbox(1).setValue(false);
-
-        getPopupButton(1).openPopup();
-
-        Assertions.assertFalse(getSelectAllCheckbox(1).isIndeterminate());
-        Assertions.assertFalse(getSelectAllCheckbox(1).getValue());
-    }
-
-    @Test
-    void allValuesHiddenByOtherFilter_selectAllHidden() {
-        // Hide every row through another column's filter
-        getFilterCheckboxGroup(2).deselectAll();
-
-        // Refresh this column's options by reopening its popup
-        getPopupButton(1).openPopup();
-
-        Assertions.assertFalse(getSelectAllCheckbox(1).isVisible());
-    }
-
-    @Test
-    void someValuesHiddenByOtherFilter_selectAllVisible() {
-        // Hide a single row through another column's filter
-        getFilterCheckboxGroup(2).deselect("4");
-
-        getPopupButton(1).openPopup();
-
-        Assertions.assertTrue(getSelectAllCheckbox(1).isVisible());
-    }
-
-    @Test
-    void deselectLastRemainingValue_lastRowHidden() {
-        // Keep only the value of row 5 selected, then deselect it too
-        CheckboxGroup<String> group = getFilterCheckboxGroup(1);
-        group.deselect("3");
-        group.deselect("4");
-        group.deselect("5");
-        // Only "6" (row 5) remains selected
-        group.deselect("6");
-
-        Assertions.assertEquals(4, getItemFilter(1).getFilteredRows().size());
-        Assertions.assertTrue(getFilterCheckboxGroup(1).getValue().isEmpty());
-        Assertions.assertTrue(spreadsheet.isRowHidden(5));
-    }
-
-    private Checkbox getSelectAllCheckbox(int column) {
-        return (Checkbox) getItemFilter(column).getChildren()
-                .filter(component -> component instanceof Checkbox).findFirst()
-                .get();
-    }
-
-    private CheckboxGroup<String> getFilterCheckboxGroup(int column) {
-        return (CheckboxGroup<String>) getItemFilter(column).getChildren()
+    private CheckboxGroup<String> getFilterCheckboxGroup() {
+        return (CheckboxGroup<String>) getItemFilter().getChildren()
                 .filter(component -> component instanceof CheckboxGroup)
                 .findFirst().get();
     }
 
-    private ItemFilter getItemFilter(int column) {
-        return (ItemFilter) getPopupButtonChildren(column).get(0);
+    private ItemFilter getItemFilter() {
+        return (ItemFilter) getPopupButtonChildren().get(0);
     }
 
-    private Button getClearButton(int column) {
-        return (Button) getPopupButtonChildren(column).get(1);
+    private Button getClearButton() {
+        return (Button) getPopupButtonChildren().get(1);
     }
 
-    private List<Component> getPopupButtonChildren(int column) {
-        return getPopupButton(column).getContent().getChildren()
+    private List<Component> getPopupButtonChildren() {
+        return getPopupButton().getContent().getChildren()
                 .collect(Collectors.toList());
     }
 
-    private PopupButton getPopupButton(int column) {
-        return table.getPopupButton(column);
+    private PopupButton getPopupButton() {
+        return table.getPopupButton(1);
     }
 }

@@ -22,7 +22,6 @@ import java.util.stream.Stream;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasAriaLabel;
-import com.vaadin.flow.component.HasAriaRole;
 import com.vaadin.flow.component.HasComponents;
 import com.vaadin.flow.component.HasSize;
 import com.vaadin.flow.component.Tag;
@@ -39,10 +38,10 @@ import com.vaadin.flow.dom.Element;
  * @author Vaadin Ltd
  */
 @Tag("vaadin-card")
-@NpmPackage(value = "@vaadin/card", version = "25.3.0-alpha1")
+@NpmPackage(value = "@vaadin/card", version = "25.2.0-rc2")
 @JsModule("@vaadin/card/src/vaadin-card.js")
-public class Card extends Component implements HasSize, HasAriaLabel,
-        HasAriaRole, HasComponents, HasThemeVariant<CardVariant> {
+public class Card extends Component implements HasSize,
+        HasThemeVariant<CardVariant>, HasComponents, HasAriaLabel {
 
     private static final String MEDIA_SLOT_NAME = "media";
     private static final String TITLE_SLOT_NAME = "title";
@@ -339,6 +338,29 @@ public class Card extends Component implements HasSize, HasAriaLabel,
             var actualIndex = getElement().indexOfChild(reference.getElement());
             getElement().insertChild(actualIndex, component.getElement());
         }
+    }
+
+    /**
+     * Sets the ARIA role attribute on the card.
+     *
+     * @param role
+     *            the ARIA role, or {@code null} to clear
+     */
+    public void setAriaRole(String role) {
+        if (role == null) {
+            getElement().removeAttribute("role");
+        } else {
+            getElement().setAttribute("role", role);
+        }
+    }
+
+    /**
+     * Gets the ARIA role attribute of the card.
+     *
+     * @return an optional ARIA role of the card if no ARIA role has been set
+     */
+    public Optional<String> getAriaRole() {
+        return Optional.ofNullable(getElement().getAttribute("role"));
     }
 
     private void doSetTitle(String title) {

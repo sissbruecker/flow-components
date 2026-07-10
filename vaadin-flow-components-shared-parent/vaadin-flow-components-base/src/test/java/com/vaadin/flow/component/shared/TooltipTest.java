@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.Composite;
 import com.vaadin.flow.component.Tag;
 import com.vaadin.flow.component.shared.Tooltip.AriaLinkMode;
 import com.vaadin.flow.component.shared.Tooltip.TooltipPosition;
@@ -230,14 +229,6 @@ class TooltipTest {
     }
 
     @Test
-    void tooltipForCompositeTwice_sameReference() {
-        var composite = new CompositeComponent();
-        var tooltip = Tooltip.forComponent(composite);
-        var tooltip2 = Tooltip.forComponent(composite);
-        Assertions.assertSame(tooltip, tooltip2);
-    }
-
-    @Test
     void createTooltip_fluentAPI() {
         ui.add(component);
 
@@ -289,12 +280,5 @@ class TooltipTest {
 
     @Tag("test")
     private static class TestComponent extends Component {
-    }
-
-    private static class CompositeComponent extends Composite<TestComponent> {
-        @Override
-        protected TestComponent initContent() {
-            return new TestComponent();
-        }
     }
 }
