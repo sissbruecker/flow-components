@@ -351,6 +351,15 @@ public class FormAIController implements AIController {
      * {@link #fieldValueOptions(ValueOptions, Function) the two-argument
      * overload} to supply a converter; this is enforced at compile time.
      * <p>
+     * Item label generators are not supported with this overload: neither an
+     * explicit {@link ValueOptions#itemLabelGenerator(ItemLabelGenerator)} nor
+     * the field's own {@code setItemLabelGenerator(...)} is applied. The item
+     * is used verbatim as its own label, and the chosen label is written back
+     * unchanged as the value. A label generator that transforms the item would
+     * make the LLM pick a label that is not a valid option value, so use
+     * {@link #fieldValueOptions(ValueOptions, Function) the two-argument
+     * overload} with a converter when a custom label is needed.
+     * <p>
      * For {@link MultiSelect MultiSelect} fields the controller wraps the
      * chosen labels into a {@link LinkedHashSet} before
      * {@link HasValue#setValue}. Later calls for the same field overwrite
