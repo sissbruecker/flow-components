@@ -73,7 +73,7 @@ public class CrudGrid<E> extends Grid<E> {
         getColumns().forEach(column -> {
             final TextField field = new TextField();
             field.getElement().setAttribute("crud-role", "Search");
-            field.setAriaLabel("Filter by "
+            field.getElement().setAttribute("aria-label", "Filter by "
                     + SharedUtil.propertyIdToHumanFriendly(column.getKey()));
 
             field.addValueChangeListener(event -> {
