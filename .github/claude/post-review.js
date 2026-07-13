@@ -12,8 +12,8 @@
  *
  * Every finding is posted as its own inline review thread, demoted
  * line-level → file-level → summary list as anchoring fails. The summary body
- * holds only the overview line and any findings that could not be attached to
- * the diff.
+ * holds the overview line, a table over all findings, and the full prose of
+ * any findings that could not be attached to the diff.
  *
  * Posting uses the GraphQL pending-review flow so all threads and the summary
  * land as ONE review (single notification), and a per-thread anchoring failure
@@ -112,8 +112,27 @@ const CATEGORY_EMOJI = {
   efficiency: '⚡',
 };
 
+function categoryEmoji(finding) {
+  return CATEGORY_EMOJI[finding.category] || '👀';
+}
+
 function findingTitle(finding) {
-  return `**${CATEGORY_EMOJI[finding.category] || '👀'} ${finding.summary}**`;
+  return `**${categoryEmoji(finding)} ${finding.summary}**`;
+}
+
+// Pipes would break the table; newlines can't appear inside a cell.
+function tableCell(text) {
+  return text.replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+}
+
+// One table over ALL findings, commented and unanchored alike, in report
+// order (most severe first). The first column holds only the category emoji.
+function findingsTable(findings) {
+  return [
+    '| | Finding |',
+    '| --- | --- |',
+    ...findings.map((f) => `| ${categoryEmoji(f)} | ${tableCell(f.summary)} |`),
+  ].join('\n');
 }
 
 function fileLabel(finding) {
@@ -190,10 +209,15 @@ function overviewLine(unanchored, inlineCount) {
   return `Reviewed the changes — ${joinNaturally(clauses)}.`;
 }
 
-// Summary body: overview line, then findings whose inline anchoring failed
-// (visible, not collapsed). Zero-findings runs still post.
-function summaryBody(repo, headSha, unanchored, inlineCount) {
+// Summary body: overview line, then the table over all findings, then the
+// full prose of the findings whose inline anchoring failed (visible, not
+// collapsed) — commented findings keep their prose in the inline comment.
+// Zero-findings runs still post.
+function summaryBody(repo, headSha, findings, unanchored, inlineCount) {
   const parts = [overviewLine(unanchored, inlineCount)];
+  if (findings.length) {
+    parts.push(findingsTable(findings));
+  }
   if (unanchored.length) {
     parts.push(unanchored.map((f) => findingBlock(repo, headSha, f)).join('\n\n'));
   }
@@ -322,7 +346,7 @@ function main() {
       console.log(`\n[${fileLabel(finding)}]\n${threadBody(repo, 'HEAD', finding)}`);
     }
     console.log('\n--- summary body ---\n');
-    console.log(summaryBody(repo, 'HEAD', [], findings.length));
+    console.log(summaryBody(repo, 'HEAD', findings, [], findings.length));
     return;
   }
 
@@ -335,7 +359,7 @@ function main() {
   }
 
   if (!findings.length) {
-    const body = summaryBody(repo, pr.headRefOid, [], 0);
+    const body = summaryBody(repo, pr.headRefOid, [], [], 0);
     const result = graphql(ADD_BODY_ONLY, { prId: pr.id, body });
     logPosted(result.addPullRequestReview.pullRequestReview);
     return;
@@ -354,7 +378,7 @@ function main() {
     }
   }
 
-  const body = summaryBody(repo, pr.headRefOid, unanchored, posted);
+  const body = summaryBody(repo, pr.headRefOid, findings, unanchored, posted);
   const result = graphql(SUBMIT_REVIEW, { reviewId, body });
   logPosted(result.submitPullRequestReview.pullRequestReview);
 }
