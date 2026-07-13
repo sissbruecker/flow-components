@@ -111,15 +111,38 @@ file(s), and the candidate, and have it return exactly one of:
 
 Keep candidates where the vote is CONFIRMED or PLAUSIBLE.
 
+## Phase 3 — Write each finding for a fast read
+
+Findings are read by a busy maintainer in a PR comment. Before reporting,
+rewrite each surviving finding's `summary` and `failure_scenario` so the point
+lands on first read. These fields are rendered as Markdown, so use it.
+
+- **Code symbols in backticks.** Wrap every identifier, method, type, field,
+  and compared literal in backticks — `resolveLabel`, `HTMLInputElement`,
+  `"No matching option"` — so code stands out from prose.
+- **Plain, common developer language.** No invented or clever-sounding labels.
+  Do not use terms like "split-brain", "foot-gun", "spooky action", "split
+  personality". Name the problem in ordinary words.
+- **`summary`: one short plain sentence** naming what is wrong — not a retelling
+  of the whole mechanism.
+- **`failure_scenario`: two short paragraphs**, separated by a blank line, never
+  one dense block. First paragraph: the concrete trigger and what goes wrong
+  (the inputs, state, or steps that reach the bug). Second paragraph: the
+  resulting impact and, when it is clear, the fix. Add a third short paragraph
+  only if the issue genuinely needs it.
+- **Keep it tight.** No longer than the finder already wrote, and shorter when
+  you can. Drop restated call chains and line-number traces that do not help
+  understanding; keep the one detail that makes the problem concrete.
+
 ## Output
 
 Call the ReportFindings tool once to report this review's results
 with `{level, findings}`. `findings` is at most 8 entries ranked
 most-severe first; each entry has `file`, `line`, `summary`,
-`failure_scenario`, and `category` — a short kebab-case slug for the angle
-that produced it (`correctness`, `simplification`, `efficiency`,
-`reuse`, `altitude`, `conventions`, or a more specific slug like
-`test-coverage` when one fits better) — plus `verdict` when a verify pass
-produced one. If more than 8 survive, keep the 8 most severe. If
+`failure_scenario` (both written per Phase 3), and `category` — a short
+kebab-case slug for the angle that produced it (`correctness`,
+`simplification`, `efficiency`, `reuse`, `altitude`, `conventions`, or a more
+specific slug like `test-coverage` when one fits better) — plus `verdict` when
+a verify pass produced one. If more than 8 survive, keep the 8 most severe. If
 nothing survives verification, call it with an empty array. Do not also print
 the findings as text.
