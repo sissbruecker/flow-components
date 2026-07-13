@@ -10,13 +10,10 @@
  * posting, so a lost review is never mistaken for a clean one. An empty
  * findings array is a real result and posts a body-only "no findings" review.
  *
- * Routing (category first, then verdict — verdict measures confidence,
- * category measures whether a finding is worth an interruption):
- *   issue tier (correctness, altitude) + CONFIRMED → inline review thread,
- *     demoted line-level → file-level → summary list as anchoring fails
- *   issue tier + PLAUSIBLE → collapsed "Possible issues" section
- *   everything else (cleanup tier, unknown categories) → collapsed
- *     "Suggestions" section
+ * Every finding is posted as its own inline review thread, demoted
+ * line-level → file-level → summary list as anchoring fails. The summary body
+ * holds only the overview line and any findings that could not be attached to
+ * the diff.
  *
  * Posting uses the GraphQL pending-review flow so all threads and the summary
  * land as ONE review (single notification), and a per-thread anchoring failure
@@ -42,11 +39,6 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 const MAX_BUFFER = 100 * 1024 * 1024;
-
-// Categories worth interrupting a reviewer for; everything else — reuse,
-// simplification, efficiency, conventions, unknown slugs, missing category —
-// is cleanup. Allowlist, so new/unexpected slugs land in the quiet tier.
-const ISSUE_CATEGORIES = new Set(['correctness', 'altitude']);
 
 function capture(file, args) {
   return execFileSync(file, args, {
@@ -104,29 +96,25 @@ function normalize(finding) {
   return {
     ...finding,
     category: (finding.category || 'uncategorized').toLowerCase(),
-    verdict: (finding.verdict || 'PLAUSIBLE').toUpperCase(),
+    verdict: (finding.verdict || 'plausible').toLowerCase(),
   };
 }
 
-function route(findings) {
-  const inline = [];
-  const possible = [];
-  const suggestions = [];
-  for (const finding of findings.map(normalize)) {
-    if (!ISSUE_CATEGORIES.has(finding.category)) {
-      suggestions.push(finding);
-    } else if (finding.verdict === 'CONFIRMED') {
-      inline.push(finding);
-    } else {
-      possible.push(finding);
-    }
-  }
-  return { inline, possible, suggestions };
-}
-
 // --- Rendering ------------------------------------------------------------
-// Verdict is routing-only and never rendered. Category shows only on section
-// list items, not on inline comments.
+// Every finding starts with a category emoji on the title and ends in the
+// same meta line: file link, category, verdict.
+
+const CATEGORY_EMOJI = {
+  correctness: '⚠️',
+  simplification: '🧹',
+  reuse: '🧹',
+  conventions: '🧹',
+  efficiency: '⚡',
+};
+
+function findingTitle(finding) {
+  return `**${CATEGORY_EMOJI[finding.category] || '👀'} ${finding.summary}**`;
+}
 
 function fileLabel(finding) {
   return finding.line ? `${finding.file}:${finding.line}` : finding.file;
@@ -141,32 +129,34 @@ function fileLink(repo, headSha, finding) {
   return `[${label}](https://github.com/${repo}/blob/${headSha}/${encodeURI(finding.file)}${anchor})`;
 }
 
-function findingBlock(repo, headSha, finding) {
-  const scenario = (finding.failure_scenario || '').trim();
-  const meta = [fileLink(repo, headSha, finding), `\`${finding.category}\``]
+function findingMeta(repo, headSha, finding) {
+  const meta = [
+    fileLink(repo, headSha, finding),
+    `\`${finding.category}\``,
+    `\`${finding.verdict}\``,
+  ]
     .filter(Boolean)
     .join(' · ');
-  return [`**${finding.summary}**`, scenario, `<sub>${meta}</sub>`].filter(Boolean).join('\n');
+  return `<sub>${meta}</sub>`;
 }
 
-function section(title, items) {
-  // Blank line after </summary> or the markdown inside won't render.
-  return [
-    '<details>',
-    `<summary>${title} (${items.length})</summary>`,
-    '',
-    items.join('\n\n'),
-    '',
-    '</details>',
-  ].join('\n');
+function findingBlock(repo, headSha, finding) {
+  const scenario = (finding.failure_scenario || '').trim();
+  return [findingTitle(finding), scenario, findingMeta(repo, headSha, finding)]
+    .filter(Boolean)
+    .join('\n');
 }
 
-function threadBody(finding, { aroundLine } = {}) {
+function threadBody(repo, headSha, finding, { aroundLine } = {}) {
   const parts = [];
   if (aroundLine) {
     parts.push(`_Around line ${aroundLine} — could not attach to the exact diff line._`);
   }
-  parts.push(`**${finding.summary}**`, finding.failure_scenario || '');
+  parts.push(
+    findingTitle(finding),
+    finding.failure_scenario || '',
+    findingMeta(repo, headSha, finding)
+  );
   return parts.filter(Boolean).join('\n\n');
 }
 
@@ -182,22 +172,17 @@ function joinNaturally(parts) {
 // One-line overview that opens every summary body; doubles as the whole body
 // when there is nothing else to show, so "reviewed, nothing found" stays
 // distinguishable from "review never happened".
-function overviewLine({ unanchored, possible, suggestions }, inlineCount) {
-  const below = [
-    unanchored.length ? pluralize(unanchored.length, 'issue') : null,
-    possible.length ? pluralize(possible.length, 'possible issue') : null,
-    suggestions.length ? pluralize(suggestions.length, 'suggestion') : null,
-  ].filter(Boolean);
+function overviewLine(unanchored, inlineCount) {
   const clauses = [];
   if (inlineCount) {
     clauses.push(
-      inlineCount === 1
-        ? 'left **1 comment** on an issue'
-        : `left **${inlineCount} comments** on issues`
+      inlineCount === 1 ? 'left **1 comment**' : `left **${inlineCount} comments**`
     );
   }
-  if (below.length) {
-    clauses.push(`collected ${joinNaturally(below)} below`);
+  if (unanchored.length) {
+    clauses.push(
+      `collected ${pluralize(unanchored.length, 'finding')} below that could not be attached to the diff`
+    );
   }
   if (!clauses.length) {
     return '✅ Nothing to flag — the changes look good.';
@@ -205,23 +190,12 @@ function overviewLine({ unanchored, possible, suggestions }, inlineCount) {
   return `Reviewed the changes — ${joinNaturally(clauses)}.`;
 }
 
-// Summary body: overview line, then unanchored confirmed issues (visible, not
-// collapsed), then PLAUSIBLE issues and cleanup folded into counted sections;
-// empty sections are omitted. Zero-findings runs still post.
-function summaryBody(repo, headSha, sections, inlineCount) {
-  const { unanchored, possible, suggestions } = sections;
-  const parts = [overviewLine(sections, inlineCount)];
+// Summary body: overview line, then findings whose inline anchoring failed
+// (visible, not collapsed). Zero-findings runs still post.
+function summaryBody(repo, headSha, unanchored, inlineCount) {
+  const parts = [overviewLine(unanchored, inlineCount)];
   if (unanchored.length) {
-    parts.push(
-      '**Confirmed issues that could not be attached to the diff:**\n\n' +
-        unanchored.map((f) => findingBlock(repo, headSha, f)).join('\n\n')
-    );
-  }
-  if (possible.length) {
-    parts.push(section('⚠️ Possible issues', possible.map((f) => findingBlock(repo, headSha, f))));
-  }
-  if (suggestions.length) {
-    parts.push(section('💡 Suggestions', suggestions.map((f) => findingBlock(repo, headSha, f))));
+    parts.push(unanchored.map((f) => findingBlock(repo, headSha, f)).join('\n\n'));
   }
   return parts.join('\n\n');
 }
@@ -291,13 +265,13 @@ function tryAddThread(mutation, variables) {
   }
 }
 
-function postThread(reviewId, finding) {
+function postThread(repo, headSha, reviewId, finding) {
   if (finding.file && finding.line) {
     const created = tryAddThread(ADD_LINE_THREAD, {
       reviewId,
       path: finding.file,
       line: finding.line,
-      body: threadBody(finding),
+      body: threadBody(repo, headSha, finding),
     });
     if (created) return true;
     console.warn(`Line thread failed for ${fileLabel(finding)}, retrying file-level`);
@@ -306,7 +280,7 @@ function postThread(reviewId, finding) {
     const created = tryAddThread(ADD_FILE_THREAD, {
       reviewId,
       path: finding.file,
-      body: threadBody(finding, { aroundLine: finding.line }),
+      body: threadBody(repo, headSha, finding, { aroundLine: finding.line }),
     });
     if (created) return true;
     console.warn(`File thread failed for ${finding.file}, demoting to summary`);
@@ -339,21 +313,16 @@ function main() {
     );
     process.exit(1);
   }
-  const findings = Array.isArray(report.findings) ? report.findings : [];
-  const routed = route(findings);
-  console.log(
-    `Findings: ${findings.length} total — ${routed.inline.length} inline candidate(s), ` +
-      `${routed.possible.length} possible issue(s), ${routed.suggestions.length} suggestion(s)`
-  );
+  const findings = (Array.isArray(report.findings) ? report.findings : []).map(normalize);
+  console.log(`Findings: ${findings.length} total`);
 
   if (process.env.DRY_RUN) {
-    const sections = { unanchored: [], ...routed };
     console.log('\n--- inline thread bodies ---');
-    for (const finding of routed.inline) {
-      console.log(`\n[${fileLabel(finding)}]\n${threadBody(finding)}`);
+    for (const finding of findings) {
+      console.log(`\n[${fileLabel(finding)}]\n${threadBody(repo, 'HEAD', finding)}`);
     }
     console.log('\n--- summary body ---\n');
-    console.log(summaryBody(repo, 'HEAD', sections, routed.inline.length));
+    console.log(summaryBody(repo, 'HEAD', [], findings.length));
     return;
   }
 
@@ -365,8 +334,8 @@ function main() {
     graphql(DELETE_PENDING, { reviewId: stale.id });
   }
 
-  if (!routed.inline.length) {
-    const body = summaryBody(repo, pr.headRefOid, { unanchored: [], ...routed }, 0);
+  if (!findings.length) {
+    const body = summaryBody(repo, pr.headRefOid, [], 0);
     const result = graphql(ADD_BODY_ONLY, { prId: pr.id, body });
     logPosted(result.addPullRequestReview.pullRequestReview);
     return;
@@ -377,15 +346,15 @@ function main() {
 
   const unanchored = [];
   let posted = 0;
-  for (const finding of routed.inline) {
-    if (postThread(reviewId, finding)) {
+  for (const finding of findings) {
+    if (postThread(repo, pr.headRefOid, reviewId, finding)) {
       posted += 1;
     } else {
       unanchored.push(finding);
     }
   }
 
-  const body = summaryBody(repo, pr.headRefOid, { unanchored, ...routed }, posted);
+  const body = summaryBody(repo, pr.headRefOid, unanchored, posted);
   const result = graphql(SUBMIT_REVIEW, { reviewId, body });
   logPosted(result.submitPullRequestReview.pullRequestReview);
 }
